@@ -34,9 +34,9 @@ public final class VillagerService {
     private final Map<UUID, Army> armies = new HashMap<>();
     private final Map<UUID, Villager> megaRides = new HashMap<>();
 
-    private record Army(List<ZombieVillager> members, long expiresAt, UUID excludedPlayer) {
+    private record Army(List<Villager> members, UUID excludedPlayer) {
         Army withExcludedPlayer(UUID excluded) {
-            return new Army(members, expiresAt, excluded);
+            return new Army(members, excluded);
         }
     }
 
@@ -48,6 +48,7 @@ public final class VillagerService {
         this.roleKey = new NamespacedKey(plugin, "villager_role");
 
         plugin.getServer().getScheduler().runTaskTimer(plugin, this::runWorkers, 20L, 20L);
+        plugin.getServer().getScheduler().runTaskTimer(plugin, this::updateGuards, 20L, 20L);
         plugin.getServer().getScheduler().runTaskTimer(plugin, this::updateArmies, 5L, 5L);
         plugin.getServer().getScheduler().runTaskTimer(plugin, this::updateMegaRides, 1L, 1L);
         plugin.getServer().getScheduler().runTaskTimer(plugin, this::updatePassiveBonuses, 40L, 40L);
@@ -172,10 +173,6 @@ public final class VillagerService {
         }
 
         ItemStack hand = player.getInventory().getItemInMainHand();
-        if (hand.getType() == Material.BREAD || hand.getType() == Material.CARROT) {
-            addResident(player, villager, hand);
-            return;
-        }
         if (isWorkTool(hand)) {
             equipFromHand(player, villager);
             return;
@@ -184,21 +181,45 @@ public final class VillagerService {
         openVillagerInventory(player, villager);
     }
 
-    private void addResident(Player player, Villager near, ItemStack food) {
-        if (food.getAmount() < 20) {
-            player.sendMessage("§cНужно 20 хлеба или 20 моркови.");
-            return;
+    public boolean handleFlagInteract(Player player, Entity entity) {
+        if (!"flag".equals(kindOf(entity)) || !player.getUniqueId().equals(ownerOf(entity))) return false;
+        ItemStack bread = findIngredient(player, Material.BREAD, 20);
+        ItemStack carrots = findIngredient(player, Material.CARROT, 20);
+        if (bread == null || carrots == null) {
+            player.sendMessage("§cДля улучшения флага нужно 20 хлеба И 20 моркови.");
+            return true;
         }
         long count = ownedEntities(player.getUniqueId(), "village").stream()
-                .filter(entity -> entity instanceof Villager).count();
+                .filter(Villager.class::isInstance).count();
         int max = plugin.getConfig().getInt("limits.village_villagers", 8);
         if (count >= max) {
-            player.sendMessage("§cЛимит деревни — " + max + " жителей.");
-            return;
+            player.sendMessage("§cДеревня уже достигла лимита " + max + " жителей.");
+            return true;
         }
-        food.setAmount(food.getAmount() - 20);
-        spawnVillager(player, near.getLocation().clone().add(1, 0, 0), "village");
-        player.sendMessage("§aВ деревне появился новый житель. Всего: " + (count + 1) + "/" + max + ".");
+        bread.setAmount(bread.getAmount() - 20);
+        carrots.setAmount(carrots.getAmount() - 20);
+        Location spawn = entity.getLocation().clone().add(1.5, 0, 0.5);
+        spawnVillager(player, spawn, "village");
+        player.sendMessage("§aФлаг улучшен: появился новый житель. Деревня: " + (count + 1) + "/" + max + ".");
+        return true;
+    }
+
+    private ItemStack findIngredient(Player player, Material material, int amount) {
+        int total = 0;
+        for (ItemStack item : player.getInventory().getStorageContents()) {
+            if (item != null && item.getType() == material) total += item.getAmount();
+        }
+        if (total < amount) return null;
+
+        int remaining = amount;
+        for (ItemStack item : player.getInventory().getStorageContents()) {
+            if (item == null || item.getType() != material) continue;
+            int remove = Math.min(remaining, item.getAmount());
+            item.setAmount(item.getAmount() - remove);
+            remaining -= remove;
+            if (remaining == 0) break;
+        }
+        return new ItemStack(material, amount);
     }
 
     private String roleForTool(Material type) {
@@ -364,19 +385,17 @@ public final class VillagerService {
 
     public void startArmy(Player player) {
         disbandArmy(player.getUniqueId());
-        List<ZombieVillager> members = new ArrayList<>();
+        List<Villager> members = new ArrayList<>();
         for (int i = 0; i < 15; i++) {
             Location spawn = player.getLocation().clone().add((i % 5) - 2, 0, 2 + (i / 5));
-            ZombieVillager soldier = (ZombieVillager) spawn.getWorld().spawnEntity(spawn, EntityType.ZOMBIE_VILLAGER);
-            tag(soldier, player, "army");
-            soldier.setAdult();
-            soldier.setCanPickupItems(false);
-            soldier.setCustomName("§cБоец помещика §7(" + player.getName() + ")");
-            soldier.setCustomNameVisible(true);
-            soldier.getAttribute(Attribute.MAX_HEALTH).setBaseValue(28.0);
-            soldier.setHealth(28.0);
-            soldier.getAttribute(Attribute.MOVEMENT_SPEED).setBaseValue(0.30);
-            soldier.getAttribute(Attribute.ATTACK_DAMAGE).setBaseValue(7.0);
+            Villager soldier = spawnVillager(player, spawn, "army");
+            soldier.setAI(true);
+            soldier.setAware(true);
+            soldier.setProfession(Villager.Profession.WEAPONSMITH);
+            soldier.setCustomName("§cСтраж помещика §7(" + player.getName() + ")");
+            soldier.getAttribute(Attribute.MAX_HEALTH).setBaseValue(32.0);
+            soldier.setHealth(32.0);
+            soldier.getAttribute(Attribute.MOVEMENT_SPEED).setBaseValue(0.32);
             EntityEquipment gear = soldier.getEquipment();
             gear.setBoots(enchant(Material.LEATHER_BOOTS, Enchantment.PROTECTION, 3));
             gear.setLeggings(enchant(Material.LEATHER_LEGGINGS, Enchantment.PROTECTION, 3));
@@ -390,9 +409,9 @@ public final class VillagerService {
             gear.setItemInMainHandDropChance(1.0f);
             members.add(soldier);
         }
-        long duration = plugin.getConfig().getLong("durations.army", 20L);
-        armies.put(player.getUniqueId(), new Army(members, System.currentTimeMillis() + duration * 1000L, null));
-        player.sendMessage("§cАрмия из 15 бойцов призвана на 20 секунд. ПКМ по игроку — исключить его из списка целей армии; все остальные игроки в радиусе 75 блоков станут целями. Shift — распустить.");
+        armies.put(player.getUniqueId(), new Army(members, null));
+        player.sendMessage("§c15 стражников призваны. Они не исчезают по таймеру и охраняют вас, пока их не убьют.");
+        player.sendMessage("§7ПКМ по игроку — исключить его из целей всей армии. Все остальные игроки в радиусе 75 блоков атакуются.");
     }
 
     private ItemStack enchant(Material material, Enchantment enchantment, int level) {
@@ -402,32 +421,49 @@ public final class VillagerService {
     }
 
     public boolean isArmyActive(UUID ownerId) {
-        return armies.containsKey(ownerId);
+        if (armies.containsKey(ownerId)) return true;
+        return !ownedEntities(ownerId, "army").isEmpty();
     }
 
-    // A right-clicked player becomes immune to this army; the army hunts every other player nearby.
     public void setArmyTarget(Player owner, Entity clicked) {
         Army army = armies.get(owner.getUniqueId());
-        if (army == null || !(clicked instanceof Player excluded) || excluded.equals(owner)) return;
+        if (army == null) {
+            List<Villager> existing = ownedEntities(owner.getUniqueId(), "army").stream()
+                    .filter(Villager.class::isInstance).map(Villager.class::cast).toList();
+            if (existing.isEmpty()) return;
+            army = new Army(existing, null);
+        }
+        if (!(clicked instanceof Player excluded) || excluded.equals(owner)) return;
         armies.put(owner.getUniqueId(), army.withExcludedPlayer(excluded.getUniqueId()));
-        owner.sendMessage("§eАрмия не будет атаковать §f" + excluded.getName()
+        owner.sendMessage("§eАрмия больше не атакует §f" + excluded.getName()
                 + "§e. Все остальные игроки в радиусе 75 блоков — цели.");
-        excluded.sendMessage("§aАрмия помещика вас не тронет, пока действует этот призыв.");
+        excluded.sendMessage("§aСтражники этого помещика не будут вас атаковать.");
     }
 
     public void disbandArmy(UUID ownerId) {
         Army army = armies.remove(ownerId);
+        List<Entity> members = ownedEntities(ownerId, "army");
         if (army != null) army.members().forEach(Entity::remove);
+        members.forEach(Entity::remove);
     }
 
     public void disbandAll() {
-        for (UUID owner : new ArrayList<>(armies.keySet())) disbandArmy(owner);
+        // Армия намеренно переживает reload: она состоит из постоянных помеченных жителей.
         for (Villager mount : new ArrayList<>(megaRides.values())) mount.remove();
         megaRides.clear();
         cleanupTransientEntities();
     }
 
     private void updateArmies() {
+        // Восстанавливаем список стражников после перезагрузки плагина.
+        for (Player owner : Bukkit.getOnlinePlayers()) {
+            if (!armies.containsKey(owner.getUniqueId())) {
+                List<Villager> restored = ownedEntities(owner.getUniqueId(), "army").stream()
+                        .filter(Villager.class::isInstance).map(Villager.class::cast).toList();
+                if (!restored.isEmpty()) armies.put(owner.getUniqueId(), new Army(restored, null));
+            }
+        }
+
         long now = System.currentTimeMillis();
         Iterator<Map.Entry<UUID, Army>> iterator = armies.entrySet().iterator();
         while (iterator.hasNext()) {
@@ -435,15 +471,17 @@ public final class VillagerService {
             UUID ownerId = entry.getKey();
             Army army = entry.getValue();
             Player owner = Bukkit.getPlayer(ownerId);
-            if (owner == null || !owner.isOnline() || now >= army.expiresAt()) {
-                army.members().forEach(Entity::remove);
+            if (owner == null || !owner.isOnline()) continue;
+
+            List<Villager> alive = army.members().stream()
+                    .filter(Entity::isValid).filter(v -> !v.isDead()).toList();
+            if (alive.isEmpty()) {
                 iterator.remove();
                 continue;
             }
 
-            for (int i = 0; i < army.members().size(); i++) {
-                ZombieVillager soldier = army.members().get(i);
-                if (!soldier.isValid() || soldier.isDead()) continue;
+            for (int i = 0; i < alive.size(); i++) {
+                Villager soldier = alive.get(i);
                 Player target = soldier.getWorld().getPlayers().stream()
                         .filter(candidate -> !candidate.getUniqueId().equals(ownerId))
                         .filter(candidate -> army.excludedPlayer() == null
@@ -455,18 +493,27 @@ public final class VillagerService {
                         .orElse(null);
 
                 if (target != null) {
-                    soldier.setTarget(target);
+                    soldier.getPathfinder().moveTo(target.getLocation(), 1.25);
+                    if (target.getLocation().distanceSquared(soldier.getLocation()) <= 2.8 * 2.8) {
+                        long last = armyAttackTimes.getOrDefault(soldier.getUniqueId(), 0L);
+                        if (now - last >= 1000L) {
+                            target.damage(6.0, soldier);
+                            target.setNoDamageTicks(0);
+                            armyAttackTimes.put(soldier.getUniqueId(), now);
+                        }
+                    }
                 } else {
-                    soldier.setTarget(null);
                     int row = i / 5;
                     int col = i % 5;
-                    Vector facing = owner.getLocation().getDirection().setY(0).normalize();
-                    if (facing.lengthSquared() < 0.01) facing = new Vector(0, 0, 1);
-                    Vector side = new Vector(-facing.getZ(), 0, facing.getX());
+                    Vector forward = owner.getLocation().getDirection().setY(0).normalize();
+                    if (forward.lengthSquared() < 0.01) forward = new Vector(0, 0, 1);
+                    Vector side = new Vector(-forward.getZ(), 0, forward.getX());
                     Location formation = owner.getLocation().clone()
-                            .subtract(facing.multiply(3 + row * 1.3))
+                            .subtract(forward.clone().multiply(3 + row * 1.4))
                             .add(side.multiply(col - 2));
-                    soldier.getPathfinder().moveTo(formation, 1.1);
+                    if (soldier.getLocation().distanceSquared(formation) > 4.0) {
+                        soldier.getPathfinder().moveTo(formation, 1.15);
+                    }
                 }
             }
         }
@@ -547,7 +594,7 @@ public final class VillagerService {
         for (World world : Bukkit.getWorlds()) {
             for (Entity entity : new ArrayList<>(world.getEntities())) {
                 String kind = kindOf(entity);
-                if ("army".equals(kind) || "mega".equals(kind) || "minion".equals(kind)) entity.remove();
+                if ("mega".equals(kind) || "minion".equals(kind)) entity.remove();
             }
         }
         armies.clear();
@@ -571,6 +618,39 @@ public final class VillagerService {
         }
     }
 
+    private void updatePassiveBonuses() {
+        for (Player player : Bukkit.getOnlinePlayers()) {
+            ClassType type = data.getClass(player.getUniqueId());
+            var maxHealth = player.getAttribute(Attribute.MAX_HEALTH);
+            var armor = player.getAttribute(Attribute.ARMOR);
+            if (maxHealth == null) continue;
+
+            double healthBonus = 0.0;
+            double armorBonus = 0.0;
+            if (type == ClassType.SLAVE_OWNER) {
+                long count = ownedVillagerCount(player.getUniqueId());
+                healthBonus += count * 4.0;
+                armorBonus += count * 0.5;
+            }
+            if (type == ClassType.SUMMONER) {
+                int milestones = data.getSummonerKills(player.getUniqueId()) / 50;
+                healthBonus += milestones * 2.0; // +1 сердце за каждые 50 убийств
+                armorBonus += milestones * 1.0;
+            }
+
+            double targetHealth = Math.min(2048.0, 20.0 + healthBonus);
+            double oldHealth = maxHealth.getBaseValue();
+            maxHealth.setBaseValue(targetHealth);
+            if (targetHealth > oldHealth) {
+                player.setHealth(Math.min(targetHealth, player.getHealth() + targetHealth - oldHealth));
+            } else if (player.getHealth() > targetHealth) {
+                player.setHealth(targetHealth);
+            }
+            if (armor != null) armor.setBaseValue(armorBonus);
+        }
+    }
+
+    // Professions generate goods passively in the villager's own stored inventory.
     private void runWorkers() {
         long now = System.currentTimeMillis();
         for (World world : Bukkit.getWorlds()) {
@@ -579,155 +659,160 @@ public final class VillagerService {
                 UUID ownerId = ownerOf(villager);
                 if (ownerId == null) continue;
                 Location flag = data.getFlag(ownerId);
-                if (flag == null || !flag.getWorld().equals(villager.getWorld())) {
-                    Player owner = Bukkit.getPlayer(ownerId);
-                    if (owner != null && owner.getWorld().equals(villager.getWorld())
-                            && owner.getLocation().distanceSquared(villager.getLocation()) > 16) {
-                        villager.getPathfinder().moveTo(owner.getLocation(), 1.0);
-                    }
-                    continue;
-                }
-                if (flag.distanceSquared(villager.getLocation()) > 180.0 * 180.0) continue;
+                if (flag == null || flag.getWorld() != villager.getWorld()
+                        || flag.distanceSquared(villager.getLocation()) > 180.0 * 180.0) continue;
 
                 String role = villager.getPersistentDataContainer().get(roleKey, PersistentDataType.STRING);
                 if (!Set.of("miner", "woodcutter", "farmer").contains(role)) continue;
-
-                Location target = workerTargets.get(villager.getUniqueId());
-                if (target == null || !isWorkBlock(target.getBlock(), role)) {
-                    if (now < nextSearchAt.getOrDefault(villager.getUniqueId(), 0L)) continue;
-                    target = findWorkBlock(flag, role);
-                    if (target == null) {
-                        nextSearchAt.put(villager.getUniqueId(), now + 10000L);
-                        continue;
-                    }
-                    workerTargets.put(villager.getUniqueId(), target);
-                }
-
-                if (target.getWorld() != villager.getWorld()) {
-                    villager.teleport(flag.clone().add(0.5, 0, 0.5));
-                    continue;
-                }
-                if (villager.getLocation().distanceSquared(target.clone().add(0.5, 0, 0.5)) > 3.2 * 3.2) {
-                    villager.getPathfinder().moveTo(target.clone().add(0.5, 0, 0.5), 1.15);
-                    continue;
-                }
-
                 long due = nextWorkAt.getOrDefault(villager.getUniqueId(), 0L);
                 if (now < due) continue;
-                boolean equipped = hasCorrectTool(villager, role);
-                long interval = equipped ? 2500L : 37500L; // без инструмента в 15 раз медленнее
-                harvestBlock(villager, target.getBlock(), role);
+
+                Material tool = villager.getEquipment().getItemInMainHand().getType();
+                int tier = toolTier(tool, role);
+                long interval = tier == 0 ? 450000L : 30000L;
                 nextWorkAt.put(villager.getUniqueId(), now + interval);
-                workerTargets.remove(villager.getUniqueId());
-                nextSearchAt.put(villager.getUniqueId(), now + 1000L);
+                addPassiveProfessionLoot(villager, role, tier);
             }
         }
     }
 
-    private boolean hasCorrectTool(Villager villager, String role) {
-        Material tool = villager.getEquipment().getItemInMainHand().getType();
+    private int toolTier(Material tool, String role) {
         String name = tool.name();
-        return switch (role) {
+        boolean correct = switch (role) {
             case "miner" -> name.endsWith("_PICKAXE");
             case "woodcutter" -> name.endsWith("_AXE");
             case "farmer" -> name.endsWith("_HOE");
             default -> false;
         };
+        if (!correct) return 0;
+        if (name.startsWith("NETHERITE_")) return 5;
+        if (name.startsWith("DIAMOND_")) return 4;
+        if (name.startsWith("IRON_")) return 3;
+        if (name.startsWith("STONE_")) return 2;
+        if (name.startsWith("WOODEN_") || name.startsWith("GOLDEN_")) return 1;
+        return 0;
     }
 
-    private Location findWorkBlock(Location flag, String role) {
-        World world = flag.getWorld();
-        int workRadius = plugin.getConfig().getInt("limits.work_radius", 180);
+    private void addPassiveProfessionLoot(Villager villager, String role, int tier) {
+        List<ItemStack> drops = new ArrayList<>();
         Random random = ThreadLocalRandom.current();
+        if ("miner".equals(role)) {
+            switch (tier) {
+                case 5 -> {
+                    drops.add(new ItemStack(Material.RAW_IRON, 4 + random.nextInt(5)));
+                    drops.add(new ItemStack(Material.RAW_GOLD, 2 + random.nextInt(3)));
+                    drops.add(new ItemStack(Material.DIAMOND, 1 + random.nextInt(2)));
+                    if (random.nextInt(5) == 0) drops.add(new ItemStack(Material.ANCIENT_DEBRIS));
+                }
+                case 4 -> {
+                    drops.add(new ItemStack(Material.RAW_IRON, 3 + random.nextInt(4)));
+                    drops.add(new ItemStack(Material.RAW_GOLD, 1 + random.nextInt(3)));
+                    drops.add(new ItemStack(Material.REDSTONE, 4 + random.nextInt(7)));
+                    if (random.nextInt(4) == 0) drops.add(new ItemStack(Material.DIAMOND));
+                }
+                case 3 -> {
+                    drops.add(new ItemStack(Material.RAW_IRON, 3 + random.nextInt(4)));
+                    drops.add(new ItemStack(Material.COAL, 3 + random.nextInt(5)));
+                    drops.add(new ItemStack(Material.LAPIS_LAZULI, 2 + random.nextInt(4)));
+                }
+                case 2 -> {
+                    drops.add(new ItemStack(Material.COAL, 2 + random.nextInt(4)));
+                    drops.add(new ItemStack(Material.RAW_IRON, 1 + random.nextInt(3)));
+                }
+                default -> drops.add(new ItemStack(Material.COAL, 1 + random.nextInt(2)));
+            }
+        } else if ("woodcutter".equals(role)) {
+            Material log = switch (tier) {
+                case 5, 4 -> Material.SPRUCE_LOG;
+                case 3 -> Material.OAK_LOG;
+                case 2 -> Material.BIRCH_LOG;
+                default -> Material.OAK_LOG;
+            };
+            drops.add(new ItemStack(log, tier == 0 ? 1 : 3 + random.nextInt(Math.max(1, tier * 2))));
+            if (tier >= 4 && random.nextInt(3) == 0) drops.add(new ItemStack(Material.STICK, 2 + random.nextInt(4)));
+        } else if ("farmer".equals(role)) {
+            Material crop = switch (tier) {
+                case 5 -> Material.GOLDEN_CARROT;
+                case 4 -> Material.CARROT;
+                case 3 -> Material.WHEAT;
+                case 2 -> Material.POTATO;
+                default -> Material.BEETROOT;
+            };
+            drops.add(new ItemStack(crop, tier == 0 ? 1 : 4 + random.nextInt(5)));
+            if (tier >= 3) drops.add(new ItemStack(Material.BREAD, 1 + random.nextInt(3)));
+            if (tier >= 5 && random.nextInt(4) == 0) drops.add(new ItemStack(Material.GOLDEN_APPLE));
+        }
+        addToStorage(villager, drops);
+        villager.getWorld().spawnParticle(Particle.HAPPY_VILLAGER,
+                villager.getLocation().add(0, 1.2, 0), 3, 0.2, 0.3, 0.2, 0.02);
+    }
 
-        // Сначала детерминированно проверяем область вокруг флага, чтобы ферма или шахта не пропускалась.
-        int nearRadius = "miner".equals(role) ? 16 : 32;
-        int step = 2;
-        int minY = world.getMinHeight() + 5;
-        int maxY = Math.min(world.getMaxHeight() - 5, 120);
+    private void updateGuards() {
+        for (World world : Bukkit.getWorlds()) {
+            List<Villager> residents = world.getEntities().stream()
+                    .filter(Villager.class::isInstance).map(Villager.class::cast)
+                    .filter(v -> "village".equals(kindOf(v))).toList();
+            for (Villager guard : residents) {
+                UUID ownerId = ownerOf(guard);
+                if (ownerId == null) continue;
+                String role = guard.getPersistentDataContainer().get(roleKey, PersistentDataType.STRING);
+                if (!"swordsman".equals(role) && !"archer".equals(role)) continue;
 
-        for (int dx = -nearRadius; dx <= nearRadius; dx += step) {
-            for (int dz = -nearRadius; dz <= nearRadius; dz += step) {
-                if (dx * dx + dz * dz > nearRadius * nearRadius) continue;
-                int x = flag.getBlockX() + dx;
-                int z = flag.getBlockZ() + dz;
-                if (!world.isChunkLoaded(x >> 4, z >> 4)) continue;
+                Location flag = data.getFlag(ownerId);
+                if (flag == null || flag.getWorld() != world
+                        || flag.distanceSquared(guard.getLocation()) > 180.0 * 180.0) continue;
 
-                if ("miner".equals(role)) {
-                    for (int y = minY; y <= maxY; y += 3) {
-                        Block block = world.getBlockAt(x, y, z);
-                        if (isWorkBlock(block, role)) return block.getLocation();
+                Monster threat = world.getEntities().stream()
+                        .filter(Monster.class::isInstance).map(Monster.class::cast)
+                        .filter(Monster::isValid).filter(m -> !m.isDead())
+                        .filter(m -> m.getLocation().distanceSquared(guard.getLocation()) <= 18.0 * 18.0)
+                        .filter(m -> isThreatToOwner(m, ownerId))
+                        .min(Comparator.comparingDouble(m -> m.getLocation().distanceSquared(guard.getLocation())))
+                        .orElse(null);
+
+                if (threat != null) {
+                    guard.getPathfinder().moveTo(threat.getLocation(), 1.15);
+                    if ("swordsman".equals(role) && threat.getLocation().distanceSquared(guard.getLocation()) <= 2.8 * 2.8) {
+                        long due = nextWorkAt.getOrDefault(guard.getUniqueId(), 0L);
+                        if (System.currentTimeMillis() >= due) {
+                            threat.damage(5.0, guard);
+                            nextWorkAt.put(guard.getUniqueId(), System.currentTimeMillis() + 1000L);
+                        }
+                    } else if ("archer".equals(role) && threat.getLocation().distanceSquared(guard.getLocation()) <= 18.0 * 18.0) {
+                        long due = nextWorkAt.getOrDefault(guard.getUniqueId(), 0L);
+                        if (System.currentTimeMillis() >= due) {
+                            Vector direction = threat.getEyeLocation().toVector()
+                                    .subtract(guard.getEyeLocation().toVector()).normalize();
+                            Arrow arrow = world.spawnArrow(guard.getEyeLocation(), direction, 1.7f, 0.5f);
+                            arrow.setShooter(guard);
+                            arrow.setDamage(4.0);
+                            arrow.setPickupStatus(AbstractArrow.PickupStatus.DISALLOWED);
+                            nextWorkAt.put(guard.getUniqueId(), System.currentTimeMillis() + 1400L);
+                        }
                     }
                 } else {
-                    int top = world.getHighestBlockYAt(x, z);
-                    int bottom = Math.max(world.getMinHeight(), top - ("woodcutter".equals(role) ? 32 : 6));
-                    for (int y = top; y >= bottom; y--) {
-                        Block block = world.getBlockAt(x, y, z);
-                        if (isWorkBlock(block, role)) return block.getLocation();
+                    Villager worker = residents.stream()
+                            .filter(other -> other != guard && ownerId.equals(ownerOf(other)))
+                            .filter(other -> !Set.of("swordsman", "archer").contains(
+                                    other.getPersistentDataContainer().get(roleKey, PersistentDataType.STRING)))
+                            .min(Comparator.comparingDouble(other ->
+                                    other.getLocation().distanceSquared(guard.getLocation())))
+                            .orElse(null);
+                    if (worker != null && worker.getLocation().distanceSquared(guard.getLocation()) > 9.0) {
+                        guard.getPathfinder().moveTo(worker.getLocation(), 1.0);
+                    } else if (guard.getLocation().distanceSquared(flag) > 16.0) {
+                        guard.getPathfinder().moveTo(flag, 1.0);
                     }
                 }
             }
         }
-
-        // Если рядом нет работы, ищем по всей разрешённой зоне до 180 блоков.
-        for (int attempt = 0; attempt < 500; attempt++) {
-            int dx = random.nextInt(-workRadius, workRadius + 1);
-            int dz = random.nextInt(-workRadius, workRadius + 1);
-            if (dx * dx + dz * dz > workRadius * workRadius) continue;
-            int x = flag.getBlockX() + dx;
-            int z = flag.getBlockZ() + dz;
-            if (!world.isChunkLoaded(x >> 4, z >> 4)) continue;
-
-            if ("miner".equals(role)) {
-                if (maxY <= minY) continue;
-                int y = random.nextInt(minY, maxY);
-                Block block = world.getBlockAt(x, y, z);
-                if (isWorkBlock(block, role)) return block.getLocation();
-            } else {
-                int top = world.getHighestBlockYAt(x, z);
-                int scan = "woodcutter".equals(role) ? 32 : 6;
-                for (int y = top; y >= Math.max(world.getMinHeight(), top - scan); y--) {
-                    Block block = world.getBlockAt(x, y, z);
-                    if (isWorkBlock(block, role)) return block.getLocation();
-                }
-            }
-        }
-        return null;
     }
 
-    private boolean isWorkBlock(Block block, String role) {
-        Material type = block.getType();
-        if ("miner".equals(role)) return type.name().endsWith("_ORE");
-        if ("woodcutter".equals(role)) return type.name().endsWith("_LOG")
-                || type.name().endsWith("_WOOD") || type == Material.CRIMSON_STEM || type == Material.WARPED_STEM;
-        if ("farmer".equals(role) && block.getBlockData() instanceof Ageable ageable) {
-            return ageable.getAge() >= ageable.getMaximumAge();
-        }
-        return false;
-    }
-
-    private void harvestBlock(Villager villager, Block block, String role) {
-        if (!isWorkBlock(block, role)) return;
-        Material toolMaterial = switch (role) {
-            case "miner" -> Material.IRON_PICKAXE;
-            case "woodcutter" -> Material.IRON_AXE;
-            case "farmer" -> Material.IRON_HOE;
-            default -> Material.AIR;
-        };
-        ItemStack tool = hasCorrectTool(villager, role)
-                ? villager.getEquipment().getItemInMainHand().clone() : new ItemStack(toolMaterial);
-
-        Collection<ItemStack> drops = block.getDrops(tool);
-        addToStorage(villager, drops);
-
-        if ("farmer".equals(role) && block.getBlockData() instanceof Ageable ageable) {
-            ageable.setAge(0);
-            block.setBlockData(ageable);
-        } else {
-            block.setType(Material.AIR);
-        }
-        villager.getWorld().spawnParticle(Particle.HAPPY_VILLAGER,
-                block.getLocation().add(0.5, 0.8, 0.5), 5, 0.2, 0.2, 0.2, 0.02);
+    private boolean isThreatToOwner(Monster monster, UUID owner) {
+        LivingEntity target = monster.getTarget();
+        if (target == null) return true;
+        if (target.getUniqueId().equals(owner)) return true;
+        return owner.equals(ownerOf(target));
     }
 
     private void addToStorage(Villager villager, Collection<ItemStack> drops) {
