@@ -67,13 +67,12 @@ public final class AbilityEngine {
     public void cast(Player player, String id) {
         if (id == null) return;
         ClassType playerClass = data.getClass(player.getUniqueId());
-        if (playerClass == null || !belongsToClass(playerClass, id)) {
-            CopiedSkill copy = copies.get(player.getUniqueId());
-            if (!(playerClass == ClassType.CHAMELEON && "chameleon_copy".equals(id)
-                    && copy != null && copy.expiresAt() > System.currentTimeMillis())) {
-                player.sendMessage("§cЭта способность недоступна вашему классу.");
-                return;
-            }
+        CopiedSkill activeCopy = copies.get(player.getUniqueId());
+        boolean borrowedSkill = playerClass == ClassType.CHAMELEON && activeCopy != null
+                && activeCopy.expiresAt() > System.currentTimeMillis() && activeCopy.abilityId().equals(id);
+        if (playerClass == null || (!belongsToClass(playerClass, id) && !borrowedSkill)) {
+            player.sendMessage("§cЭта способность недоступна вашему классу.");
+            return;
         }
 
         if ("chameleon_copy".equals(id)) {
@@ -465,16 +464,18 @@ public final class AbilityEngine {
         final Location end = destination.clone();
         final int maxTicks = (int) Math.ceil(plugin.getConfig().getDouble("limits.tongue_range", 33)
                 / plugin.getConfig().getDouble("limits.tongue_speed_blocks_per_second", 2) * 20.0);
-        plugin.getServer().getScheduler().runTaskTimer(plugin, task -> {
-            if (!player.isOnline() || player.isDead() || player.getWorld() != end.getWorld()
-                    || player.getLocation().distanceSquared(end) < 2.25) {
-                task.cancel();
-                return;
+        new org.bukkit.scheduler.BukkitRunnable() {
+            private int elapsed;
+            @Override public void run() {
+                if (!player.isOnline() || player.isDead() || player.getWorld() != end.getWorld()
+                        || player.getLocation().distanceSquared(end) < 2.25 || elapsed++ >= maxTicks) {
+                    cancel();
+                    return;
+                }
+                Vector direction = end.toVector().subtract(player.getLocation().toVector()).normalize();
+                player.setVelocity(direction.multiply(0.1));
             }
-            Vector direction = end.toVector().subtract(player.getLocation().toVector()).normalize();
-            player.setVelocity(direction.multiply(0.1));
-        }, 0L, 1L);
-        plugin.getServer().getScheduler().runTaskLater(plugin, () -> { /* pull duration is capped separately by distance/speed */ }, maxTicks);
+        }.runTaskTimer(plugin, 0L, 1L);
     }
 
     public void handleChameleonPassive(EntityDamageByEntityEvent event) {
