@@ -603,23 +603,6 @@ public final class VillagerService {
 
     private void updatePassiveBonuses() {
         for (Player player : Bukkit.getOnlinePlayers()) {
-            if (data.getClass(player.getUniqueId()) != ClassType.SLAVE_OWNER) continue;
-            double count = ownedVillagerCount(player.getUniqueId());
-            var maxHealth = player.getAttribute(Attribute.MAX_HEALTH);
-            var armor = player.getAttribute(Attribute.ARMOR);
-            if (maxHealth != null) {
-                double targetHealth = Math.min(2048.0, 20.0 + count * 4.0);
-                double oldHealth = maxHealth.getBaseValue();
-                maxHealth.setBaseValue(targetHealth);
-                if (targetHealth > oldHealth) player.setHealth(Math.min(targetHealth, player.getHealth() + targetHealth - oldHealth));
-                else if (player.getHealth() > targetHealth) player.setHealth(targetHealth);
-            }
-            if (armor != null) armor.setBaseValue(count * 0.5);
-        }
-    }
-
-    private void updatePassiveBonuses() {
-        for (Player player : Bukkit.getOnlinePlayers()) {
             ClassType type = data.getClass(player.getUniqueId());
             var maxHealth = player.getAttribute(Attribute.MAX_HEALTH);
             var armor = player.getAttribute(Attribute.ARMOR);
