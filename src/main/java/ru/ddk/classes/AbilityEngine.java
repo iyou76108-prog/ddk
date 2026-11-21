@@ -765,14 +765,44 @@ public final class AbilityEngine {
                 target.damage(6.0, attacker);
                 target.addPotionEffect(new PotionEffect(PotionEffectType.POISON, 60, 0, false, true));
                 projectile.remove();
+            } else if ("archmage_firebolt".equals(type) && event.getEntity() instanceof LivingEntity target) {
+                event.setDamage(14.0);
+                target.setFireTicks(Math.max(target.getFireTicks(), 100));
+            } else if ("archmage_meteor".equals(type)) {
+                // AoE is applied by ProjectileHitEvent; prevent duplicate direct fireball damage.
+                event.setDamage(0.0);
             }
         }
     }
 
     public void handleProjectileHit(ProjectileHitEvent event) {
-        if (!(event.getEntity() instanceof Snowball snowball)) return;
-        String ability = snowball.getPersistentDataContainer().get(projectileKey, PersistentDataType.STRING);
-        if (!"tongue".equals(ability) || !(snowball.getShooter() instanceof Player player)) return;
+        Projectile projectile = event.getEntity();
+        String ability = projectile.getPersistentDataContainer().get(projectileKey, PersistentDataType.STRING);
+
+        if ("archmage_meteor".equals(ability) && projectile.getShooter() instanceof Player caster) {
+            Location center = event.getHitEntity() != null
+                    ? event.getHitEntity().getLocation().clone()
+                    : event.getHitBlock() != null
+                    ? event.getHitBlock().getLocation().add(0.5, 0.5, 0.5)
+                    : projectile.getLocation().clone();
+            World world = center.getWorld();
+            world.spawnParticle(Particle.EXPLOSION, center, 5, 1.8, 1.2, 1.8, 0.2);
+            world.spawnParticle(Particle.FLAME, center, 90, 2.5, 1.5, 2.5, 0.15);
+            world.spawnParticle(Particle.LAVA, center, 35, 2.0, 1.0, 2.0, 0.1);
+            world.playSound(center, Sound.ENTITY_GENERIC_EXPLODE, 2.0f, 0.55f);
+            for (Entity entity : world.getNearbyEntities(center, 7.0, 6.0, 7.0)) {
+                if (!(entity instanceof LivingEntity living) || entity.equals(caster)) continue;
+                living.damage(18.0, caster);
+                living.setFireTicks(Math.max(living.getFireTicks(), 120));
+                Vector push = living.getLocation().toVector().subtract(center.toVector());
+                if (push.lengthSquared() > 0.01) living.setVelocity(push.normalize().multiply(0.85).setY(0.45));
+            }
+            projectile.remove();
+            return;
+        }
+
+        if (!(projectile instanceof Snowball snowball) || !"tongue".equals(ability)
+                || !(snowball.getShooter() instanceof Player player)) return;
         Location destination = event.getHitEntity() != null ? event.getHitEntity().getLocation()
                 : event.getHitBlock() != null ? event.getHitBlock().getLocation().add(0.5, 0.5, 0.5) : null;
         if (destination == null || destination.getWorld() != player.getWorld()
