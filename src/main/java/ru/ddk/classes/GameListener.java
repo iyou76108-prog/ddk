@@ -117,6 +117,13 @@ public final class GameListener implements Listener, CommandExecutor {
     }
 
     @EventHandler
+    public void onArmorStandManipulate(PlayerArmorStandManipulateEvent event) {
+        if (villagers.handleFlagInteract(event.getPlayer(), event.getRightClicked())) {
+            event.setCancelled(true);
+        }
+    }
+
+    @EventHandler
     public void onInteractEntity(PlayerInteractEntityEvent event) {
         Player player = event.getPlayer();
         Entity clicked = event.getRightClicked();
