@@ -117,7 +117,7 @@ public final class VillagerService {
 
         ArmorStand flag = (ArmorStand) target.getWorld().spawnEntity(target.clone().add(0.5, 0, 0.5), EntityType.ARMOR_STAND);
         tag(flag, player, "flag");
-        flag.setInvisible(true);
+        flag.setInvisible(false);
         flag.setMarker(true);
         flag.setGravity(false);
         flag.setCustomName("§6Флаг помещика: §f" + player.getName());
