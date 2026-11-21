@@ -31,7 +31,7 @@ public enum ClassType {
             case "druid", "друид" -> DRUID;
             case "duelist", "дуэлянт", "дуэлист" -> DUELIST;
             case "summoner", "призыватель" -> SUMMONER;
-            case "slave_owner", "slaveowner", "рабовладелец", "рабовладелец" -> SLAVE_OWNER;
+            case "slave_owner", "slaveowner", "рабовладелец" -> SLAVE_OWNER;
             case "chameleon", "хамелеон" -> CHAMELEON;
             default -> null;
         };
