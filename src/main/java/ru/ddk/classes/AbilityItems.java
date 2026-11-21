@@ -25,6 +25,16 @@ public final class AbilityItems {
         return item;
     }
 
+    public ItemStack createPassive(String id, Material material, String title, String description) {
+        ItemStack item = new ItemStack(material);
+        ItemMeta meta = item.getItemMeta();
+        meta.setDisplayName("§e" + title);
+        meta.setLore(List.of("§7" + description, "§6Пассивная способность — работает постоянно"));
+        meta.getPersistentDataContainer().set(abilityKey, PersistentDataType.STRING, id);
+        item.setItemMeta(meta);
+        return item;
+    }
+
     public String getAbilityId(ItemStack item) {
         if (item == null || !item.hasItemMeta()) return null;
         return item.getItemMeta().getPersistentDataContainer().get(abilityKey, PersistentDataType.STRING);
@@ -58,13 +68,13 @@ public final class AbilityItems {
                     create("owner_work", Material.WRITABLE_BOOK, "Работайте за меня", "Открыть управление работой жителей"),
                     create("owner_army", Material.IRON_SWORD, "Армия", "Призвать 15 бойцов на 23 секунды"),
                     create("owner_mega", Material.SADDLE, "Мега житель", "Оседлать башню из трёх жителей"),
-                    create("owner_passive", Material.HEART_OF_THE_SEA, "Возьму взамен", "Пассивно: +2 сердца и +0,5 брони за жителя")
+                    createPassive("owner_passive", Material.HEART_OF_THE_SEA, "Возьму взамен", "+2 сердца и +0,5 брони за каждого вашего жителя")
             };
             case CHAMELEON -> new ItemStack[] {
                     create("chameleon_camouflage", Material.LIME_DYE, "Мой окрас", "Невидимость на 4 секунды и скорость II"),
-                    create("chameleon_passive", Material.FERN, "Свой среди чужих", "Пассивно: мобы игнорируют вас"),
+                    createPassive("chameleon_passive", Material.FERN, "Свой среди чужих", "Враждебные мобы не выбирают вас целью"),
                     create("chameleon_tongue", Material.SNOWBALL, "Лизнуть языком", "Подтянуться к точке до 33 блоков"),
-                    create("chameleon_life", Material.OAK_LEAVES, "Живучесть", "Пассивно: здоровье рядом с листвой"),
+                    createPassive("chameleon_life", Material.OAK_LEAVES, "Живучесть", "+0,5 максимального здоровья за блок листвы рядом"),
                     create("chameleon_copy", Material.AMETHYST_SHARD, "Копирование", "Скопировать способность цели на 80 секунд")
             };
         };
