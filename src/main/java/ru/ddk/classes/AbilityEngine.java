@@ -160,6 +160,21 @@ public final class AbilityEngine {
                 player.addPotionEffect(new PotionEffect(PotionEffectType.FIRE_RESISTANCE, 60, 0, true, false));
                 player.addPotionEffect(new PotionEffect(PotionEffectType.REGENERATION, 60, 2, true, false));
             }
+            if (type == ClassType.CHAMELEON) {
+                for (Entity entity : player.getNearbyEntities(24, 12, 24)) {
+                    if (!(entity instanceof Monster monster)) continue;
+                    String rawOwner = monster.getPersistentDataContainer().get(ownerKey, PersistentDataType.STRING);
+                    boolean necromancerSummon = false;
+                    if (rawOwner != null) {
+                        try {
+                            UUID owner = UUID.fromString(rawOwner);
+                            necromancerSummon = data.getClass(owner) == ClassType.SUMMONER
+                                    && "minion".equals(monster.getPersistentDataContainer().get(kindKey, PersistentDataType.STRING));
+                        } catch (IllegalArgumentException ignored) { }
+                    }
+                    if (!necromancerSummon && monster.getTarget() == player) monster.setTarget(null);
+                }
+            }
         }
     }
 
