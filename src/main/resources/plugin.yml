@@ -1,9 +1,9 @@
 name: SMPClasses
-version: 1.0.0
+version: 1.2.0
 main: ru.ddk.classes.SMPClassesPlugin
 api-version: '1.21.11'
 author: ddk
-description: Пять классов и способности для анархичного SMP
+description: Шесть классов и способности для анархичного SMP
 commands:
   class:
     description: Информация о классе и способности
