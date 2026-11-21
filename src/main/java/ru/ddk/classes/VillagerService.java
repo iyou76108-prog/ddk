@@ -30,6 +30,7 @@ public final class VillagerService {
     private final Map<UUID, String> pendingRoles = new HashMap<>();
     private final Map<UUID, Location> workerTargets = new HashMap<>();
     private final Map<UUID, Long> nextWorkAt = new HashMap<>();
+    private final Map<UUID, Long> nextSearchAt = new HashMap<>();
     private final Map<UUID, Army> armies = new HashMap<>();
     private final Map<UUID, Villager> megaRides = new HashMap<>();
 
@@ -244,6 +245,7 @@ public final class VillagerService {
         }
         workerTargets.remove(villager.getUniqueId());
         nextWorkAt.put(villager.getUniqueId(), 0L);
+        nextSearchAt.put(villager.getUniqueId(), 0L);
     }
 
     private String roleName(String role) {
@@ -592,8 +594,12 @@ public final class VillagerService {
 
                 Location target = workerTargets.get(villager.getUniqueId());
                 if (target == null || !isWorkBlock(target.getBlock(), role)) {
+                    if (now < nextSearchAt.getOrDefault(villager.getUniqueId(), 0L)) continue;
                     target = findWorkBlock(flag, role);
-                    if (target == null) continue;
+                    if (target == null) {
+                        nextSearchAt.put(villager.getUniqueId(), now + 10000L);
+                        continue;
+                    }
                     workerTargets.put(villager.getUniqueId(), target);
                 }
 
@@ -613,6 +619,7 @@ public final class VillagerService {
                 harvestBlock(villager, target.getBlock(), role);
                 nextWorkAt.put(villager.getUniqueId(), now + interval);
                 workerTargets.remove(villager.getUniqueId());
+                nextSearchAt.put(villager.getUniqueId(), now + 1000L);
             }
         }
     }
