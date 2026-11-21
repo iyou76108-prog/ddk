@@ -34,6 +34,17 @@ public final class PlayerDataStore {
         save();
     }
 
+    public int getSummonerKills(UUID uuid) {
+        return yaml.getInt(base(uuid) + ".summoner_kills", 0);
+    }
+
+    public int addSummonerKill(UUID uuid) {
+        int kills = getSummonerKills(uuid) + 1;
+        yaml.set(base(uuid) + ".summoner_kills", kills);
+        save();
+        return kills;
+    }
+
     public long getCooldown(UUID uuid, String key) {
         return yaml.getLong(base(uuid) + ".cooldowns." + key, 0L);
     }
