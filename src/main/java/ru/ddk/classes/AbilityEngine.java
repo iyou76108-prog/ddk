@@ -104,7 +104,7 @@ public final class AbilityEngine {
             case "owner_place" -> villagers.toggleFlag(player);
             case "owner_work" -> { villagers.openWorkMenu(player); yield true; }
             case "owner_army" -> { villagers.startArmy(player); yield true; }
-            case "owner_mega" -> { villagers.startMegaRide(player); yield true; }
+            case "owner_mega" -> villagers.startMegaRide(player);
             case "chameleon_camouflage" -> chameleonCamouflage(player);
             case "chameleon_tongue" -> chameleonTongue(player);
             default -> false;
