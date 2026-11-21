@@ -45,6 +45,27 @@ public final class PlayerDataStore {
         return kills;
     }
 
+    public Set<UUID> getArmyExcludedPlayers(UUID uuid) {
+        Set<UUID> result = new HashSet<>();
+        for (String raw : yaml.getStringList(base(uuid) + ".army_excluded")) {
+            try { result.add(UUID.fromString(raw)); } catch (IllegalArgumentException ignored) { }
+        }
+        return result;
+    }
+
+    public void addArmyExcludedPlayer(UUID owner, UUID excluded) {
+        Set<UUID> players = getArmyExcludedPlayers(owner);
+        if (players.add(excluded)) {
+            yaml.set(base(owner) + ".army_excluded", players.stream().map(UUID::toString).toList());
+            save();
+        }
+    }
+
+    public void clearArmyExcludedPlayers(UUID owner) {
+        yaml.set(base(owner) + ".army_excluded", null);
+        save();
+    }
+
     public long getCooldown(UUID uuid, String key) {
         return yaml.getLong(base(uuid) + ".cooldowns." + key, 0L);
     }
