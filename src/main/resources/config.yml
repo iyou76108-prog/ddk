@@ -1,11 +1,10 @@
 # Все значения времени указаны в секундах.
 cooldowns:
   druid:
-    roots: 24
-    dash: 18
-    thorn: 28
-    bark: 38
-    grove: 65
+    rootstorm: 26
+    wildcharge: 18
+    sporeburst: 30
+    avatar: 75
   duelist:
     parry: 18
     lunge: 16
@@ -13,11 +12,10 @@ cooldowns:
     whirlwind: 25
     last_round: 70
   summoner:
-    wolf: 35
-    skeletons: 55
-    chains: 30
-    recall: 40
-    guardian: 95
+    hound: 35
+    archers: 45
+    knight: 55
+    legion: 120
   slave_owner:
     place: 90
     work_order: 10
@@ -29,14 +27,14 @@ cooldowns:
     copy: 120
 
 durations:
-  army: 23
+  army: 20
   mega_villager: 15
   camouflage: 4
   copied_skill: 80
 
 limits:
   village_villagers: 8
-  summoner_minions: 5
+  summoner_minions: 8
   tongue_range: 33
   tongue_speed_blocks_per_second: 2
   work_radius: 180
