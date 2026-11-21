@@ -119,7 +119,7 @@ public final class VillagerService {
 
         Block targetBlock = player.getTargetBlockExact(6);
         Location target = targetBlock == null
-                ? player.getLocation().getBlock().getRelative(0, 0, 2).getLocation()
+                ? player.getLocation().clone().add(player.getLocation().getDirection().normalize().multiply(3)).getBlock().getLocation()
                 : targetBlock.getRelative(0, 1, 0).getLocation();
         target.setYaw(player.getLocation().getYaw());
         target.setPitch(0);
@@ -635,26 +635,56 @@ public final class VillagerService {
 
     private Location findWorkBlock(Location flag, String role) {
         World world = flag.getWorld();
-        int radius = plugin.getConfig().getInt("limits.work_radius", 180);
+        int workRadius = plugin.getConfig().getInt("limits.work_radius", 180);
         Random random = ThreadLocalRandom.current();
-        for (int attempt = 0; attempt < 180; attempt++) {
-            int dx = random.nextInt(-radius, radius + 1);
-            int dz = random.nextInt(-radius, radius + 1);
-            if (dx * dx + dz * dz > radius * radius) continue;
+
+        // Сначала детерминированно проверяем область вокруг флага, чтобы ферма или шахта не пропускалась.
+        int nearRadius = "miner".equals(role) ? 16 : 32;
+        int step = 2;
+        int minY = world.getMinHeight() + 5;
+        int maxY = Math.min(world.getMaxHeight() - 5, 120);
+
+        for (int dx = -nearRadius; dx <= nearRadius; dx += step) {
+            for (int dz = -nearRadius; dz <= nearRadius; dz += step) {
+                if (dx * dx + dz * dz > nearRadius * nearRadius) continue;
+                int x = flag.getBlockX() + dx;
+                int z = flag.getBlockZ() + dz;
+                if (!world.isChunkLoaded(x >> 4, z >> 4)) continue;
+
+                if ("miner".equals(role)) {
+                    for (int y = minY; y <= maxY; y += 3) {
+                        Block block = world.getBlockAt(x, y, z);
+                        if (isWorkBlock(block, role)) return block.getLocation();
+                    }
+                } else {
+                    int top = world.getHighestBlockYAt(x, z);
+                    int bottom = Math.max(world.getMinHeight(), top - ("woodcutter".equals(role) ? 32 : 6));
+                    for (int y = top; y >= bottom; y--) {
+                        Block block = world.getBlockAt(x, y, z);
+                        if (isWorkBlock(block, role)) return block.getLocation();
+                    }
+                }
+            }
+        }
+
+        // Если рядом нет работы, ищем по всей разрешённой зоне до 180 блоков.
+        for (int attempt = 0; attempt < 500; attempt++) {
+            int dx = random.nextInt(-workRadius, workRadius + 1);
+            int dz = random.nextInt(-workRadius, workRadius + 1);
+            if (dx * dx + dz * dz > workRadius * workRadius) continue;
             int x = flag.getBlockX() + dx;
             int z = flag.getBlockZ() + dz;
             if (!world.isChunkLoaded(x >> 4, z >> 4)) continue;
 
             if ("miner".equals(role)) {
-                int minY = world.getMinHeight() + 5;
-                int maxY = Math.min(world.getMaxHeight() - 5, 120);
                 if (maxY <= minY) continue;
                 int y = random.nextInt(minY, maxY);
                 Block block = world.getBlockAt(x, y, z);
                 if (isWorkBlock(block, role)) return block.getLocation();
             } else {
                 int top = world.getHighestBlockYAt(x, z);
-                for (int y = top; y >= Math.max(world.getMinHeight(), top - 5); y--) {
+                int scan = "woodcutter".equals(role) ? 32 : 6;
+                for (int y = top; y >= Math.max(world.getMinHeight(), top - scan); y--) {
                     Block block = world.getBlockAt(x, y, z);
                     if (isWorkBlock(block, role)) return block.getLocation();
                 }
