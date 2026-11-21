@@ -33,6 +33,7 @@ public final class GameListener implements Listener, CommandExecutor {
         this.abilities = abilities;
         this.villagers = villagers;
         this.classMenuKey = new NamespacedKey(plugin, "class_menu");
+        plugin.getServer().getScheduler().runTaskTimer(plugin, this::refreshChameleonCopySlots, 20L, 20L);
     }
 
     @EventHandler
@@ -79,7 +80,7 @@ public final class GameListener implements Listener, CommandExecutor {
             current[i] = item == null ? null : item.clone();
         }
         data.saveHotbar(player.getUniqueId(), current);
-        ItemStack[] panel = items.forClass(type);
+        ItemStack[] panel = items.forClass(type, abilities.getCopiedSkillId(player.getUniqueId()));
         player.getInventory().setContents(replaceHotbar(player.getInventory().getContents(), panel));
         data.setPanelActive(player.getUniqueId(), true);
         player.sendMessage("§aПанель способностей включена. Выберите слот 1–5 и нажмите ПКМ. F — вернуть инвентарь.");
@@ -111,6 +112,7 @@ public final class GameListener implements Listener, CommandExecutor {
         if (abilityId == null) return;
         event.setCancelled(true);
         abilities.cast(player, abilityId);
+        refreshChameleonCopySlot(player);
     }
 
     @EventHandler
@@ -118,12 +120,10 @@ public final class GameListener implements Listener, CommandExecutor {
         Player player = event.getPlayer();
         Entity clicked = event.getRightClicked();
 
-        if (villagers.isArmyActive(player.getUniqueId()) && clicked instanceof LivingEntity) {
-            if (!(clicked instanceof Villager v && player.getUniqueId().equals(villagers.ownerOf(v)))) {
-                villagers.setArmyTarget(player, clicked);
-                event.setCancelled(true);
-                return;
-            }
+        if (villagers.isArmyActive(player.getUniqueId()) && clicked instanceof Player) {
+            villagers.setArmyTarget(player, clicked);
+            event.setCancelled(true);
+            return;
         }
 
         if (clicked instanceof Villager villager) {
@@ -145,10 +145,20 @@ public final class GameListener implements Listener, CommandExecutor {
         abilities.handleDamage(event);
         abilities.handleChameleonPassive(event);
 
-        UUID damagerOwner = villagers.ownerOf(event.getDamager());
-        if (damagerOwner != null && event.getEntity().getUniqueId().equals(damagerOwner)) event.setCancelled(true);
+        Entity source = event.getDamager();
+        if (source instanceof Projectile projectile && projectile.getShooter() instanceof Entity shooter) {
+            source = shooter;
+        }
+        UUID damagerOwner = villagers.ownerOf(source);
         UUID victimOwner = villagers.ownerOf(event.getEntity());
-        if (victimOwner != null && event.getDamager().getUniqueId().equals(victimOwner)) event.setCancelled(true);
+
+        // Ни один призыв или боец не может нанести урон своему хозяину или союзным сущностям.
+        if (damagerOwner != null && (event.getEntity().getUniqueId().equals(damagerOwner)
+                || damagerOwner.equals(victimOwner))) {
+            event.setCancelled(true);
+        }
+        if (victimOwner != null && source.getUniqueId().equals(victimOwner)) event.setCancelled(true);
+
         if (event.getEntity() instanceof Player targetPlayer
                 && data.getClass(targetPlayer.getUniqueId()) == ClassType.CHAMELEON
                 && event.getDamager() instanceof Projectile projectile
@@ -162,12 +172,33 @@ public final class GameListener implements Listener, CommandExecutor {
             event.setCancelled(true);
         }
         UUID owner = villagers.ownerOf(event.getEntity());
-        if (owner != null && target != null && target.getUniqueId().equals(owner)) event.setCancelled(true);
+        UUID targetOwner = villagers.ownerOf(target);
+        if (owner != null && target != null
+                && (target.getUniqueId().equals(owner) || owner.equals(targetOwner))) {
+            event.setCancelled(true);
+        }
     }
 
     @EventHandler
     public void onProjectileHit(ProjectileHitEvent event) {
         abilities.handleProjectileHit(event);
+    }
+
+    private void refreshChameleonCopySlots() {
+        for (Player player : Bukkit.getOnlinePlayers()) refreshChameleonCopySlot(player);
+    }
+
+    private void refreshChameleonCopySlot(Player player) {
+        if (!data.isPanelActive(player.getUniqueId())
+                || data.getClass(player.getUniqueId()) != ClassType.CHAMELEON) return;
+        ItemStack expected = items.forClass(ClassType.CHAMELEON,
+                abilities.getCopiedSkillId(player.getUniqueId()))[4];
+        String expectedId = items.getAbilityId(expected);
+        String currentId = items.getAbilityId(player.getInventory().getItem(4));
+        if (!Objects.equals(expectedId, currentId)) {
+            player.getInventory().setItem(4, expected);
+            player.updateInventory();
+        }
     }
 
     @EventHandler
