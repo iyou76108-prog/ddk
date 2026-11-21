@@ -32,6 +32,7 @@ public final class VillagerService {
     private final Map<UUID, Long> nextWorkAt = new HashMap<>();
     private final Map<UUID, Long> nextSearchAt = new HashMap<>();
     private final Map<UUID, Army> armies = new HashMap<>();
+    private final Map<UUID, Long> armyAttackTimes = new HashMap<>();
     private final Map<UUID, Villager> megaRides = new HashMap<>();
 
     private record Army(List<Villager> members, Set<UUID> excludedPlayers) {
