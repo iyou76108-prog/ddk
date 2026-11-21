@@ -14,6 +14,7 @@ import org.bukkit.util.Vector;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ThreadLocalRandom;
 
 public final class VillagerService {
     private final SMPClassesPlugin plugin;
@@ -83,7 +84,7 @@ public final class VillagerService {
         villager.setCustomName("§aЖитель §7(" + owner.getName() + ")");
         villager.setCustomNameVisible(true);
         villager.setAdult();
-        villager.setCanPickupItems(false);
+        villager.setCanPickupLoot(false);
         return villager;
     }
 
@@ -243,7 +244,27 @@ public final class VillagerService {
     public void onInventoryClose(InventoryCloseEvent event) {
         UUID villagerId = openedInventories.remove(event.getPlayer().getUniqueId());
         if (villagerId != null && event.getView().getTitle().equals("§8Склад жителя")) {
-            data.setVillagerInventory(villagerId, event.getInventory().getContents());
+            ItemStack[] contents = event.getInventory().getContents();
+            // Первый слот — инструмент жителя, второй — стрелы для лучника.
+            Villager villager = null;
+            Entity entity = Bukkit.getEntity(villagerId);
+            if (entity instanceof Villager found) villager = found;
+            if (villager != null && contents.length > 0 && contents[0] != null) {
+                Material gear = contents[0].getType();
+                if (gear.name().endsWith("_SWORD") || gear.name().endsWith("_PICKAXE")
+                        || gear.name().endsWith("_AXE") || gear.name().endsWith("_HOE")
+                        || gear == Material.BOW) {
+                    villager.getEquipment().setItemInMainHand(contents[0].clone());
+                    villager.getEquipment().setItemInMainHandDropChance(0.0f);
+                    contents[0] = null;
+                }
+                if (contents.length > 1 && contents[1] != null && contents[1].getType() == Material.ARROW) {
+                    villager.getEquipment().setItemInOffHand(contents[1].clone());
+                    villager.getEquipment().setItemInOffHandDropChance(0.0f);
+                    contents[1] = null;
+                }
+            }
+            data.setVillagerInventory(villagerId, contents);
         }
     }
 
@@ -274,10 +295,10 @@ public final class VillagerService {
             };
             villager.getEquipment().setArmorContents(armor);
             villager.getEquipment().setItemInMainHand(enchanted(Material.STONE_SWORD, Enchantment.SHARPNESS, 3));
-            villager.getEquipment().setArmorDropChance(0, 1.0f);
-            villager.getEquipment().setArmorDropChance(1, 1.0f);
-            villager.getEquipment().setArmorDropChance(2, 1.0f);
-            villager.getEquipment().setArmorDropChance(3, 1.0f);
+            villager.getEquipment().setBootsDropChance(1.0f);
+            villager.getEquipment().setLeggingsDropChance(1.0f);
+            villager.getEquipment().setChestplateDropChance(1.0f);
+            villager.getEquipment().setHelmetDropChance(1.0f);
             villager.getEquipment().setItemInMainHandDropChance(1.0f);
             members.add(villager);
         }
@@ -290,6 +311,10 @@ public final class VillagerService {
         ItemStack item = new ItemStack(material);
         item.addUnsafeEnchantment(enchantment, level);
         return item;
+    }
+
+    public boolean isArmyActive(UUID ownerId) {
+        return armies.containsKey(ownerId);
     }
 
     public void setArmyTarget(Player owner, Entity target) {
@@ -386,6 +411,10 @@ public final class VillagerService {
         }, 1L, 1L);
         plugin.getServer().getScheduler().runTaskLater(plugin, () -> finishMegaRide(player.getUniqueId()),
                 plugin.getConfig().getLong("durations.mega_villager", 15) * 20L);
+    }
+
+    public void finishRidesForQuit(UUID owner) {
+        finishMegaRide(owner);
     }
 
     private void finishMegaRide(UUID owner) {
