@@ -164,6 +164,8 @@ public final class GameListener implements Listener, CommandExecutor {
             UUID summonerOwner = resolveSummonerAttacker(event.getDamager());
             if (summonerOwner != null) {
                 recentSummonerDamageOwners.put(event.getEntity().getUniqueId(), summonerOwner);
+            } else {
+                recentSummonerDamageOwners.remove(event.getEntity().getUniqueId());
             }
         }
     }
