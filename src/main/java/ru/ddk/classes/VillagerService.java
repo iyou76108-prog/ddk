@@ -494,18 +494,13 @@ public final class VillagerService {
     }
 
     private void updateMegaRides() {
-        Iterator<Map.Entry<UUID, Villager>> iterator = megaRides.entrySet().iterator();
-        while (iterator.hasNext()) {
-            Map.Entry<UUID, Villager> entry = iterator.next();
+        List<UUID> toFinish = new ArrayList<>();
+        for (Map.Entry<UUID, Villager> entry : new ArrayList<>(megaRides.entrySet())) {
             Player rider = Bukkit.getPlayer(entry.getKey());
             Villager mount = entry.getValue();
-            if (rider == null || !rider.isOnline() || rider.isDead() || !mount.isValid()
-                    || rider.getVehicle() != mount) {
-                if (rider != null && rider.isOnline()) finishMegaRide(rider.getUniqueId());
-                else {
-                    mount.remove();
-                    iterator.remove();
-                }
+            if (rider == null || !rider.isOnline() || rider.isDead()
+                    || !mount.isValid() || rider.getVehicle() != mount) {
+                toFinish.add(entry.getKey());
                 continue;
             }
 
@@ -518,15 +513,15 @@ public final class VillagerService {
             if (input.isBackward()) move.subtract(forward);
             if (input.isRight()) move.add(right);
             if (input.isLeft()) move.subtract(right);
-            if (move.lengthSquared() > 0) {
-                move.normalize().multiply(input.isSprint() ? 0.75 : 0.58);
-            }
+            if (move.lengthSquared() > 0) move.normalize().multiply(input.isSprint() ? 0.75 : 0.58);
+
             double y = mount.getVelocity().getY();
             if (input.isJump() && mount.isOnGround()) y = 0.42;
             mount.setVelocity(new Vector(move.getX(), y, move.getZ()));
             mount.setRotation(yaw, 0);
             rider.setFallDistance(0);
         }
+        for (UUID owner : toFinish) finishMegaRide(owner);
     }
 
     public void finishRidesForQuit(UUID owner) {
