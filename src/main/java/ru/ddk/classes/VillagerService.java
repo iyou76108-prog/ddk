@@ -134,7 +134,7 @@ public final class VillagerService {
                 target.clone().add(0.5, 0, 0.5), EntityType.ARMOR_STAND);
         tag(flag, player, "flag");
         flag.setVisible(false);
-        flag.setMarker(true);
+        flag.setMarker(false);
         flag.setGravity(false);
         flag.setInvulnerable(false);
         flag.setCustomName("§6Флаг помещика: §f" + player.getName());
