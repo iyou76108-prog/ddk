@@ -307,6 +307,9 @@ public final class AbilityEngine {
         wolf.setCustomName("§bДуховный волк");
         wolf.setCustomNameVisible(true);
         wolf.addPotionEffect(new PotionEffect(PotionEffectType.SPEED, 700, 0, false, true));
+        plugin.getServer().getScheduler().runTaskLater(plugin, () -> {
+            if (wolf.isValid()) wolf.remove();
+        }, 35L * 20L);
         return true;
     }
 
