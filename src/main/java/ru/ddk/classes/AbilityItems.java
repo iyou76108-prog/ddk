@@ -87,10 +87,17 @@ public final class AbilityItems {
             };
             case CHAMELEON -> new ItemStack[] {
                     create("chameleon_camouflage", Material.LIME_DYE, "Мой окрас", "Невидимость на 4 секунды и скорость II"),
-                    createPassive("chameleon_passive", Material.FERN, "Свой среди чужих", "Враждебные мобы не выбирают вас целью"),
+                    createPassive("chameleon_passive", Material.FERN, "Свой среди чужих", "Обычные мобы игнорируют вас, призывы некроманта наносят 10% урона"),
                     create("chameleon_tongue", Material.SNOWBALL, "Лизнуть языком", "Подтянуться к точке до 33 блоков"),
                     createPassive("chameleon_life", Material.OAK_LEAVES, "Живучесть", "+0,5 максимального здоровья за блок листвы рядом"),
                     create("chameleon_copy", Material.AMETHYST_SHARD, "Копирование", "Скопировать случайную способность игрока на 80 секунд")
+            };
+            case ARCHMAGE -> new ItemStack[] {
+                    create("archmage_firebolt", Material.FIRE_CHARGE, "Огненное копьё", "Пробивающий огненный снаряд с высоким уроном"),
+                    create("archmage_blink", Material.BLAZE_POWDER, "Пылающий шаг", "Телепорт вперёд и огненный след"),
+                    create("archmage_meteor", Material.FIREWORK_STAR, "Метеоритный дождь", "Ульта: множество крупных метеоров с мощными взрывами"),
+                    create("archmage_lava", Material.LAVA_BUCKET, "Лавовое озеро", "Создаёт безопасное для владельца лавовое поле на 10 секунд"),
+                    create("archmage_golem", Material.MAGMA_CREAM, "Голем магмы", "Голем каждые 4 секунды замедляет врагов и поджигает их")
             };
         };
         if (type == ClassType.CHAMELEON && copiedAbilityId != null) {
@@ -120,6 +127,11 @@ public final class AbilityItems {
             case "owner_mega" -> create(id, Material.SADDLE, "Мега житель", "Скопированная способность помещика");
             case "chameleon_camouflage" -> create(id, Material.LIME_DYE, "Мой окрас", "Скопированная способность хамелеона");
             case "chameleon_tongue" -> create(id, Material.SNOWBALL, "Лизнуть языком", "Скопированная способность хамелеона");
+            case "archmage_firebolt" -> create(id, Material.FIRE_CHARGE, "Огненное копьё", "Скопированная способность архимага");
+            case "archmage_blink" -> create(id, Material.BLAZE_POWDER, "Пылающий шаг", "Скопированная способность архимага");
+            case "archmage_meteor" -> create(id, Material.FIREWORK_STAR, "Метеоритный дождь", "Скопированная способность архимага");
+            case "archmage_lava" -> create(id, Material.LAVA_BUCKET, "Лавовое озеро", "Скопированная способность архимага");
+            case "archmage_golem" -> create(id, Material.MAGMA_CREAM, "Голем магмы", "Скопированная способность архимага");
             default -> null;
         };
     }
