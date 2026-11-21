@@ -34,9 +34,11 @@ public final class VillagerService {
     private final Map<UUID, Army> armies = new HashMap<>();
     private final Map<UUID, Villager> megaRides = new HashMap<>();
 
-    private record Army(List<Villager> members, UUID excludedPlayer) {
+    private record Army(List<Villager> members, Set<UUID> excludedPlayers) {
         Army withExcludedPlayer(UUID excluded) {
-            return new Army(members, excluded);
+            Set<UUID> updated = new HashSet<>(excludedPlayers);
+            updated.add(excluded);
+            return new Army(members, Set.copyOf(updated));
         }
     }
 
@@ -385,6 +387,7 @@ public final class VillagerService {
 
     public void startArmy(Player player) {
         disbandArmy(player.getUniqueId());
+        data.clearArmyExcludedPlayers(player.getUniqueId());
         List<Villager> members = new ArrayList<>();
         for (int i = 0; i < 15; i++) {
             Location spawn = player.getLocation().clone().add((i % 5) - 2, 0, 2 + (i / 5));
@@ -409,7 +412,7 @@ public final class VillagerService {
             gear.setItemInMainHandDropChance(1.0f);
             members.add(soldier);
         }
-        armies.put(player.getUniqueId(), new Army(members, null));
+        armies.put(player.getUniqueId(), new Army(members, data.getArmyExcludedPlayers(player.getUniqueId())));
         player.sendMessage("§c15 стражников призваны. Они не исчезают по таймеру и охраняют вас, пока их не убьют.");
         player.sendMessage("§7ПКМ по игроку — исключить его из целей всей армии. Все остальные игроки в радиусе 75 блоков атакуются.");
     }
@@ -431,12 +434,13 @@ public final class VillagerService {
             List<Villager> existing = ownedEntities(owner.getUniqueId(), "army").stream()
                     .filter(Villager.class::isInstance).map(Villager.class::cast).toList();
             if (existing.isEmpty()) return;
-            army = new Army(existing, null);
+            army = new Army(existing, data.getArmyExcludedPlayers(owner.getUniqueId()));
         }
         if (!(clicked instanceof Player excluded) || excluded.equals(owner)) return;
+        data.addArmyExcludedPlayer(owner.getUniqueId(), excluded.getUniqueId());
         armies.put(owner.getUniqueId(), army.withExcludedPlayer(excluded.getUniqueId()));
-        owner.sendMessage("§eАрмия больше не атакует §f" + excluded.getName()
-                + "§e. Все остальные игроки в радиусе 75 блоков — цели.");
+        owner.sendMessage("§eИгрок §f" + excluded.getName()
+                + " §eдобавлен в список исключений. Все остальные игроки в радиусе 75 блоков остаются целями.");
         excluded.sendMessage("§aСтражники этого помещика не будут вас атаковать.");
     }
 
@@ -460,7 +464,8 @@ public final class VillagerService {
             if (!armies.containsKey(owner.getUniqueId())) {
                 List<Villager> restored = ownedEntities(owner.getUniqueId(), "army").stream()
                         .filter(Villager.class::isInstance).map(Villager.class::cast).toList();
-                if (!restored.isEmpty()) armies.put(owner.getUniqueId(), new Army(restored, null));
+                if (!restored.isEmpty()) armies.put(owner.getUniqueId(),
+                        new Army(restored, data.getArmyExcludedPlayers(owner.getUniqueId())));
             }
         }
 
@@ -484,8 +489,7 @@ public final class VillagerService {
                 Villager soldier = alive.get(i);
                 Player target = soldier.getWorld().getPlayers().stream()
                         .filter(candidate -> !candidate.getUniqueId().equals(ownerId))
-                        .filter(candidate -> army.excludedPlayer() == null
-                                || !candidate.getUniqueId().equals(army.excludedPlayer()))
+                        .filter(candidate -> !army.excludedPlayers().contains(candidate.getUniqueId()))
                         .filter(candidate -> candidate.getGameMode() != GameMode.SPECTATOR)
                         .filter(candidate -> candidate.getLocation().distanceSquared(owner.getLocation()) <= 75.0 * 75.0)
                         .min(Comparator.comparingDouble(candidate ->
