@@ -176,7 +176,7 @@ public final class AbilityEngine {
         var hit = player.getWorld().rayTraceBlocks(player.getEyeLocation(), direction, distance,
                 FluidCollisionMode.NEVER, true);
         if (hit != null && hit.getHitPosition() != null) {
-            distance = Math.max(1.0, player.getEyeLocation().distance(hit.getHitPosition()) - 1.2);
+            distance = Math.max(1.0, player.getEyeLocation().toVector().distance(hit.getHitPosition()) - 1.2);
         }
         player.setVelocity(direction.multiply(Math.min(1.6, distance / 5.5)).setY(0.32));
         player.getWorld().spawnParticle(Particle.COMPOSTER, start, 25, 0.5, 0.5, 0.5, 0.08);
