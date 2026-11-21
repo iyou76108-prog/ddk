@@ -25,12 +25,20 @@ cooldowns:
     camouflage: 22
     tongue: 28
     copy: 120
+  archmage:
+    firebolt: 8
+    blink: 18
+    meteor: 150
+    lava: 65
+    golem: 90
 
 durations:
-  army: 20
+  army: 0 # 0 = бессрочно, пока стражники не погибнут
   mega_villager: 15
   camouflage: 4
   copied_skill: 80
+  archmage_lava: 10
+  archmage_golem: 25
 
 limits:
   village_villagers: 8
