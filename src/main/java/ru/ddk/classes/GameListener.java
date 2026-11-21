@@ -24,6 +24,7 @@ public final class GameListener implements Listener, CommandExecutor {
     private final AbilityEngine abilities;
     private final VillagerService villagers;
     private final NamespacedKey classMenuKey;
+    private final Map<UUID, UUID> recentSummonerDamageOwners = new HashMap<>();
 
     public GameListener(SMPClassesPlugin plugin, PlayerDataStore data, AbilityItems items,
                         AbilityEngine abilities, VillagerService villagers) {
@@ -126,6 +127,11 @@ public final class GameListener implements Listener, CommandExecutor {
             return;
         }
 
+        if (villagers.handleFlagInteract(player, clicked)) {
+            event.setCancelled(true);
+            return;
+        }
+
         if (clicked instanceof Villager villager) {
             UUID owner = villagers.ownerOf(villager);
             if (player.getUniqueId().equals(owner)) {
@@ -133,11 +139,6 @@ public final class GameListener implements Listener, CommandExecutor {
                 villagers.handleVillagerInteract(player, villager);
             }
         }
-    }
-
-    @EventHandler
-    public void onSneak(PlayerToggleSneakEvent event) {
-        if (event.isSneaking()) villagers.disbandArmy(event.getPlayer().getUniqueId());
     }
 
     @EventHandler
@@ -159,22 +160,59 @@ public final class GameListener implements Listener, CommandExecutor {
         }
         if (victimOwner != null && source.getUniqueId().equals(victimOwner)) event.setCancelled(true);
 
-        if (event.getEntity() instanceof Player targetPlayer
-                && data.getClass(targetPlayer.getUniqueId()) == ClassType.CHAMELEON
-                && event.getDamager() instanceof Projectile projectile
-                && projectile.getShooter() instanceof Monster) event.setCancelled(true);
+        if (!event.isCancelled()) {
+            UUID summonerOwner = resolveSummonerAttacker(event.getDamager());
+            if (summonerOwner != null) {
+                recentSummonerDamageOwners.put(event.getEntity().getUniqueId(), summonerOwner);
+            }
+        }
+    }
+
+    private UUID resolveSummonerAttacker(Entity attacker) {
+        Entity source = attacker;
+        if (source instanceof Projectile projectile && projectile.getShooter() instanceof Entity shooter) {
+            source = shooter;
+        }
+        if (source instanceof Player player) {
+            return data.getClass(player.getUniqueId()) == ClassType.SUMMONER ? player.getUniqueId() : null;
+        }
+        UUID owner = villagers.ownerOf(source);
+        return owner != null && data.getClass(owner) == ClassType.SUMMONER ? owner : null;
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onEntityDeath(EntityDeathEvent event) {
+        UUID owner = recentSummonerDamageOwners.remove(event.getEntity().getUniqueId());
+        if (owner == null && event.getEntity().getLastDamageCause() instanceof EntityDamageByEntityEvent damage) {
+            owner = resolveSummonerAttacker(damage.getDamager());
+        }
+        if (owner == null || data.getClass(owner) != ClassType.SUMMONER) return;
+
+        int kills = data.addSummonerKill(owner);
+        if (kills % 50 == 0) {
+            Player summoner = Bukkit.getPlayer(owner);
+            if (summoner != null) {
+                summoner.sendMessage("§5Некротический пакт усилился! Убийств: " + kills
+                        + ". Навсегда получено +1 сердце и +1 броня.");
+                summoner.playSound(summoner.getLocation(), Sound.ENTITY_WITHER_AMBIENT, 0.8f, 1.5f);
+            }
+        }
     }
 
     @EventHandler
     public void onTarget(EntityTargetLivingEntityEvent event) {
         LivingEntity target = event.getTarget();
+        UUID attackerOwner = villagers.ownerOf(event.getEntity());
         if (target instanceof Player player && data.getClass(player.getUniqueId()) == ClassType.CHAMELEON) {
-            event.setCancelled(true);
+            boolean summonerMinion = attackerOwner != null
+                    && data.getClass(attackerOwner) == ClassType.SUMMONER
+                    && "minion".equals(villagers.kindOf(event.getEntity()));
+            if (!summonerMinion) event.setCancelled(true);
         }
-        UUID owner = villagers.ownerOf(event.getEntity());
+
         UUID targetOwner = villagers.ownerOf(target);
-        if (owner != null && target != null
-                && (target.getUniqueId().equals(owner) || owner.equals(targetOwner))) {
+        if (attackerOwner != null && target != null
+                && (target.getUniqueId().equals(attackerOwner) || attackerOwner.equals(targetOwner))) {
             event.setCancelled(true);
         }
     }
@@ -246,7 +284,6 @@ public final class GameListener implements Listener, CommandExecutor {
     public void onQuit(PlayerQuitEvent event) {
         Player player = event.getPlayer();
         if (data.isPanelActive(player.getUniqueId())) restorePanel(player);
-        villagers.disbandArmy(player.getUniqueId());
         villagers.finishRidesForQuit(player.getUniqueId());
     }
 
@@ -275,7 +312,7 @@ public final class GameListener implements Listener, CommandExecutor {
                 Player target = Bukkit.getPlayerExact(args[1]);
                 ClassType type = ClassType.fromString(args[2]);
                 if (target == null || type == null) {
-                    sender.sendMessage("§cИспользование: /classadmin set <игрок> <druid|duelist|summoner|slave_owner|chameleon>");
+                    sender.sendMessage("§cИспользование: /classadmin set <игрок> <druid|duelist|summoner|slave_owner|chameleon|archmage>");
                     return true;
                 }
                 data.setClass(target.getUniqueId(), type);
