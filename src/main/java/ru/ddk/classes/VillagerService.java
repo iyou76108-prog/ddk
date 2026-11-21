@@ -41,6 +41,7 @@ public final class VillagerService {
         plugin.getServer().getScheduler().runTaskTimer(plugin, this::runWorkers, 100L, 100L);
         plugin.getServer().getScheduler().runTaskTimer(plugin, this::updateArmies, 1L, 1L);
         plugin.getServer().getScheduler().runTaskTimer(plugin, this::updatePassiveBonuses, 40L, 40L);
+        plugin.getServer().getScheduler().runTaskLater(plugin, this::cleanupTransientEntities, 20L);
     }
 
     public NamespacedKey ownerKey() { return ownerKey; }
@@ -84,7 +85,7 @@ public final class VillagerService {
         villager.setCustomName("§aЖитель §7(" + owner.getName() + ")");
         villager.setCustomNameVisible(true);
         villager.setAdult();
-        villager.setCanPickupLoot(false);
+        villager.setCanPickupItems(false);
         return villager;
     }
 
@@ -425,18 +426,45 @@ public final class VillagerService {
         if (player != null && player.isOnline()) player.sendMessage("§eМега житель завершил поездку.");
     }
 
+    public void cleanupTransientEntities() {
+        for (World world : Bukkit.getWorlds()) {
+            for (Entity entity : new ArrayList<>(world.getEntities())) {
+                String kind = kindOf(entity);
+                if ("army".equals(kind) || "mega".equals(kind) || "minion".equals(kind)) entity.remove();
+            }
+        }
+        armies.clear();
+        megaRides.clear();
+    }
+
     private void updatePassiveBonuses() {
         for (Player player : Bukkit.getOnlinePlayers()) {
-            if (data.getClass(player.getUniqueId()) != ClassType.SLAVE_OWNER) continue;
-            long count = ownedCount(player.getUniqueId());
+            ClassType type = data.getClass(player.getUniqueId());
             var maxHealth = player.getAttribute(Attribute.MAX_HEALTH);
             var armor = player.getAttribute(Attribute.ARMOR);
-            if (maxHealth != null) {
-                double newMax = Math.min(2048.0, 20.0 + count * 4.0);
-                maxHealth.setBaseValue(newMax);
-                if (player.getHealth() > newMax) player.setHealth(newMax);
+            if (maxHealth == null) continue;
+
+            double bonusHealth = 0.0;
+            double bonusArmor = 0.0;
+            if (type == ClassType.SLAVE_OWNER) {
+                long count = ownedCount(player.getUniqueId());
+                bonusHealth = count * 4.0; // +2 сердца за каждого принадлежащего владельцу жителя
+                bonusArmor = count * 0.5;
+            } else if (type == ClassType.CHAMELEON) {
+                int leaves = 0;
+                Location center = player.getLocation();
+                for (int x = -3; x <= 3; x++) for (int y = -3; y <= 3; y++) for (int z = -3; z <= 3; z++) {
+                    Material material = center.clone().add(x, y, z).getBlock().getType();
+                    if (material.name().endsWith("_LEAVES")) leaves++;
+                }
+                bonusHealth = leaves * 0.5;
             }
-            if (armor != null) armor.setBaseValue(count * 0.5);
+            double newMax = Math.min(2048.0, 20.0 + bonusHealth);
+            double oldMax = maxHealth.getBaseValue();
+            maxHealth.setBaseValue(newMax);
+            if (newMax > oldMax) player.setHealth(Math.min(newMax, player.getHealth() + newMax - oldMax));
+            else if (player.getHealth() > newMax) player.setHealth(newMax);
+            if (armor != null) armor.setBaseValue(bonusArmor);
         }
     }
 
