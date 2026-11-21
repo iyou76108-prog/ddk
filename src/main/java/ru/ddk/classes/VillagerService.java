@@ -14,6 +14,7 @@ import org.bukkit.util.Vector;
 import org.bukkit.Input;
 
 import java.util.*;
+import java.util.concurrent.ThreadLocalRandom;
 
 public final class VillagerService {
     private static final String STOCK_TITLE = "§8Склад жителя";
