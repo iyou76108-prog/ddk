@@ -334,6 +334,12 @@ public final class VillagerService {
         new ArrayList<>(armies.keySet()).forEach(this::disbandArmy);
         for (List<Villager> ride : megaRides.values()) ride.forEach(Entity::remove);
         megaRides.clear();
+        for (World world : Bukkit.getWorlds()) {
+            for (Entity entity : new ArrayList<>(world.getEntities())) {
+                String kind = kindOf(entity);
+                if ("minion".equals(kind) || "army".equals(kind) || "mega".equals(kind)) entity.remove();
+            }
+        }
     }
 
     private void updateArmies() {
@@ -387,6 +393,7 @@ public final class VillagerService {
 
     public void startMegaRide(Player player) {
         finishMegaRide(player.getUniqueId());
+        if (player.isInsideVehicle()) player.leaveVehicle();
         Location base = player.getLocation().clone().add(0, 0, 1);
         Villager bottom = spawnVillager(player, base, "mega");
         Villager middle = spawnVillager(player, base, "mega");
@@ -402,7 +409,7 @@ public final class VillagerService {
 
         plugin.getServer().getScheduler().runTaskTimer(plugin, task -> {
             List<Villager> ride = megaRides.get(player.getUniqueId());
-            if (ride == null || !player.isOnline() || player.isDead() || !top.isValid()) {
+            if (ride == null || !player.isOnline() || player.isDead() || !top.isValid() || player.getVehicle() != top) {
                 task.cancel();
                 finishMegaRide(player.getUniqueId());
                 return;
@@ -421,8 +428,9 @@ public final class VillagerService {
     private void finishMegaRide(UUID owner) {
         List<Villager> ride = megaRides.remove(owner);
         Player player = Bukkit.getPlayer(owner);
+        if (ride == null) return;
         if (player != null && player.isInsideVehicle()) player.leaveVehicle();
-        if (ride != null) ride.forEach(Entity::remove);
+        ride.forEach(Entity::remove);
         if (player != null && player.isOnline()) player.sendMessage("§eМега житель завершил поездку.");
     }
 
