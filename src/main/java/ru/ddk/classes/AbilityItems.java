@@ -59,7 +59,7 @@ public final class AbilityItems {
             case SUMMONER -> new ItemStack[] {
                     create("summoner_wolf", Material.WOLF_SPAWN_EGG, "Спутник души", "Призвать волка на 35 секунд"),
                     create("summoner_skeletons", Material.SKELETON_SPAWN_EGG, "Костяной дозор", "Призвать двух скелетов"),
-                    create("summoner_chains", Material.CHAIN, "Цепи могилы", "Замедлить врагов в области"),
+                    create("summoner_chains", Material.IRON_BARS, "Цепи могилы", "Замедлить врагов в области"),
                     create("summoner_recall", Material.SOUL_LANTERN, "Перекличка душ", "Вернуть прислужников к себе"),
                     create("summoner_guardian", Material.IRON_BLOCK, "Древний страж", "Призвать железного голема")
             };
