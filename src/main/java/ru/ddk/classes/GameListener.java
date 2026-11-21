@@ -144,15 +144,14 @@ public final class GameListener implements Listener, CommandExecutor {
         abilities.handleDamage(event);
         abilities.handleChameleonPassive(event);
 
-        if (event.getDamager() instanceof Entity damager) {
-            UUID owner = villagers.ownerOf(damager);
-            if (owner != null && event.getEntity().getUniqueId().equals(owner)) event.setCancelled(true);
-        }
-        if (event.getEntity() instanceof Entity entity && "minion".equals(villagers.kindOf(entity))
-                && villagers.ownerOf(entity) != null) {
-            UUID owner = villagers.ownerOf(entity);
-            if (event.getDamager().getUniqueId().equals(owner)) event.setCancelled(true);
-        }
+        UUID damagerOwner = villagers.ownerOf(event.getDamager());
+        if (damagerOwner != null && event.getEntity().getUniqueId().equals(damagerOwner)) event.setCancelled(true);
+        UUID victimOwner = villagers.ownerOf(event.getEntity());
+        if (victimOwner != null && event.getDamager().getUniqueId().equals(victimOwner)) event.setCancelled(true);
+        if (event.getEntity() instanceof Player targetPlayer
+                && data.getClass(targetPlayer.getUniqueId()) == ClassType.CHAMELEON
+                && event.getDamager() instanceof Projectile projectile
+                && projectile.getShooter() instanceof Monster) event.setCancelled(true);
     }
 
     @EventHandler
