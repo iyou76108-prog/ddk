@@ -31,21 +31,19 @@ public final class AbilityEngine {
     private record CopiedSkill(String abilityId, long expiresAt) {}
 
     private static final Map<String, String> COOLDOWN_PATHS = Map.ofEntries(
-            Map.entry("druid_roots", "cooldowns.druid.roots"),
-            Map.entry("druid_dash", "cooldowns.druid.dash"),
-            Map.entry("druid_thorn", "cooldowns.druid.thorn"),
-            Map.entry("druid_bark", "cooldowns.druid.bark"),
-            Map.entry("druid_grove", "cooldowns.druid.grove"),
+            Map.entry("druid_rootstorm", "cooldowns.druid.rootstorm"),
+            Map.entry("druid_wildcharge", "cooldowns.druid.wildcharge"),
+            Map.entry("druid_sporeburst", "cooldowns.druid.sporeburst"),
+            Map.entry("druid_avatar", "cooldowns.druid.avatar"),
             Map.entry("duelist_parry", "cooldowns.duelist.parry"),
             Map.entry("duelist_lunge", "cooldowns.duelist.lunge"),
             Map.entry("duelist_challenge", "cooldowns.duelist.challenge"),
             Map.entry("duelist_whirlwind", "cooldowns.duelist.whirlwind"),
             Map.entry("duelist_last", "cooldowns.duelist.last_round"),
-            Map.entry("summoner_wolf", "cooldowns.summoner.wolf"),
-            Map.entry("summoner_skeletons", "cooldowns.summoner.skeletons"),
-            Map.entry("summoner_chains", "cooldowns.summoner.chains"),
-            Map.entry("summoner_recall", "cooldowns.summoner.recall"),
-            Map.entry("summoner_guardian", "cooldowns.summoner.guardian"),
+            Map.entry("summoner_hound", "cooldowns.summoner.hound"),
+            Map.entry("summoner_archers", "cooldowns.summoner.archers"),
+            Map.entry("summoner_knight", "cooldowns.summoner.knight"),
+            Map.entry("summoner_legion", "cooldowns.summoner.legion"),
             Map.entry("owner_place", "cooldowns.slave_owner.place"),
             Map.entry("owner_work", "cooldowns.slave_owner.work_order"),
             Map.entry("owner_army", "cooldowns.slave_owner.army"),
@@ -62,6 +60,8 @@ public final class AbilityEngine {
         this.ownerKey = villagers.ownerKey();
         this.kindKey = villagers.kindKey();
         this.projectileKey = new NamespacedKey(plugin, "projectile_ability");
+        plugin.getServer().getScheduler().runTaskTimer(plugin, this::updateClassPassives, 20L, 20L);
+        plugin.getServer().getScheduler().runTaskTimer(plugin, this::updateMinionAI, 10L, 10L);
     }
 
     public void cast(Player player, String id) {
@@ -88,21 +88,19 @@ public final class AbilityEngine {
         if (!flagAlreadyPlaced && !ready(player, id)) return;
 
         boolean success = switch (id) {
-            case "druid_roots" -> druidRoots(player);
-            case "druid_dash" -> druidDash(player);
-            case "druid_thorn" -> druidThorn(player);
-            case "druid_bark" -> druidBark(player);
-            case "druid_grove" -> druidGrove(player);
+            case "druid_rootstorm" -> druidRootstorm(player);
+            case "druid_wildcharge" -> druidWildcharge(player);
+            case "druid_sporeburst" -> druidSporeburst(player);
+            case "druid_avatar" -> druidAvatar(player);
             case "duelist_parry" -> duelistParry(player);
             case "duelist_lunge" -> duelistLunge(player);
             case "duelist_challenge" -> duelistChallenge(player);
             case "duelist_whirlwind" -> duelistWhirlwind(player);
             case "duelist_last" -> duelistLast(player);
-            case "summoner_wolf" -> summonWolf(player);
-            case "summoner_skeletons" -> summonSkeletons(player);
-            case "summoner_chains" -> summonerChains(player);
-            case "summoner_recall" -> summonerRecall(player);
-            case "summoner_guardian" -> summonGuardian(player);
+            case "summoner_hound" -> summonHound(player);
+            case "summoner_archers" -> summonArchers(player);
+            case "summoner_knight" -> summonKnight(player);
+            case "summoner_legion" -> summonLegion(player);
             case "owner_place" -> villagers.toggleFlag(player);
             case "owner_work" -> { villagers.openWorkMenu(player); yield true; }
             case "owner_army" -> { villagers.startArmy(player); yield true; }
@@ -126,7 +124,47 @@ public final class AbilityEngine {
     }
 
     private boolean isPassive(String id) {
-        return Set.of("owner_passive", "chameleon_passive", "chameleon_life").contains(id);
+        return Set.of("druid_passive", "summoner_bond", "owner_passive",
+                "chameleon_passive", "chameleon_life").contains(id);
+    }
+
+    public String getCopiedSkillId(UUID playerId) {
+        CopiedSkill skill = copies.get(playerId);
+        if (skill == null) return null;
+        if (skill.expiresAt() <= System.currentTimeMillis()) {
+            copies.remove(playerId);
+            return null;
+        }
+        return skill.abilityId();
+    }
+
+    private void updateClassPassives() {
+        for (Player player : Bukkit.getOnlinePlayers()) {
+            if (data.getClass(player.getUniqueId()) != ClassType.DRUID) continue;
+            if (nearForest(player.getLocation())) {
+                player.addPotionEffect(new PotionEffect(PotionEffectType.REGENERATION, 45, 0, true, false));
+                player.addPotionEffect(new PotionEffect(PotionEffectType.RESISTANCE, 45, 0, true, false));
+            }
+        }
+    }
+
+    private boolean nearForest(Location location) {
+        for (int x = -3; x <= 3; x++) for (int y = -2; y <= 2; y++) for (int z = -3; z <= 3; z++) {
+            Material type = location.clone().add(x, y, z).getBlock().getType();
+            if (type.name().endsWith("_LEAVES") || type == Material.MOSS_BLOCK
+                    || type == Material.GRASS_BLOCK || type == Material.MOSS_CARPET) return true;
+        }
+        return false;
+    }
+
+    private boolean isFriendly(Player owner, Entity entity) {
+        if (entity == owner) return true;
+        String raw = entity.getPersistentDataContainer().get(ownerKey, PersistentDataType.STRING);
+        return owner.getUniqueId().toString().equals(raw);
+    }
+
+    private boolean canHit(Player owner, Entity entity) {
+        return entity instanceof LivingEntity && entity != owner && !isFriendly(owner, entity);
     }
 
     private boolean ready(Player player, String id) {
@@ -289,92 +327,205 @@ public final class AbilityEngine {
         return result;
     }
 
-    private <T extends Mob> T tagMinion(T entity, Player owner) {
-        entity.getPersistentDataContainer().set(ownerKey, PersistentDataType.STRING, owner.getUniqueId().toString());
-        entity.getPersistentDataContainer().set(kindKey, PersistentDataType.STRING, "minion");
-        entity.setPersistent(true);
-        return entity;
-    }
-
-    private boolean summonWolf(Player player) {
-        if (minionCount(player) + 1 > plugin.getConfig().getInt("limits.summoner_minions", 5)) {
-            player.sendMessage("§cЛимит прислужников — 5.");
-            return false;
+    private <T extends Mob> T tagMinion(T mob, Player owner, String name,
+                                        double maxHealth, double damage, double speed, long durationSeconds) {
+        mob.getPersistentDataContainer().set(ownerKey, PersistentDataType.STRING, owner.getUniqueId().toString());
+        mob.getPersistentDataContainer().set(kindKey, PersistentDataType.STRING, "minion");
+        mob.setPersistent(true);
+        mob.setAware(true);
+        mob.setCanPickupItems(false);
+        mob.setCustomName("§5" + name + " §7(" + owner.getName() + ")");
+        mob.setCustomNameVisible(true);
+        if (mob.getAttribute(Attribute.MAX_HEALTH) != null) {
+            mob.getAttribute(Attribute.MAX_HEALTH).setBaseValue(maxHealth);
+            mob.setHealth(maxHealth);
         }
-        Wolf wolf = tagMinion((Wolf) player.getWorld().spawnEntity(player.getLocation().add(1, 0, 1), EntityType.WOLF), player);
-        wolf.setTamed(true);
-        wolf.setOwner(player);
-        wolf.setCustomName("§bДуховный волк");
-        wolf.setCustomNameVisible(true);
-        wolf.addPotionEffect(new PotionEffect(PotionEffectType.SPEED, 700, 0, false, true));
+        if (mob.getAttribute(Attribute.ATTACK_DAMAGE) != null) mob.getAttribute(Attribute.ATTACK_DAMAGE).setBaseValue(damage);
+        if (mob.getAttribute(Attribute.MOVEMENT_SPEED) != null) mob.getAttribute(Attribute.MOVEMENT_SPEED).setBaseValue(speed);
+        // Пассивка «Некротический пакт» усиливает каждого призванного бойца.
+        mob.addPotionEffect(new PotionEffect(PotionEffectType.RESISTANCE, (int) durationSeconds * 20, 0, true, false));
+        mob.addPotionEffect(new PotionEffect(PotionEffectType.STRENGTH, (int) durationSeconds * 20, 1, true, false));
+        mob.addPotionEffect(new PotionEffect(PotionEffectType.SPEED, (int) durationSeconds * 20, 0, true, false));
         plugin.getServer().getScheduler().runTaskLater(plugin, () -> {
-            if (wolf.isValid()) wolf.remove();
-        }, 35L * 20L);
+            if (mob.isValid()) mob.remove();
+        }, durationSeconds * 20L);
+        return mob;
+    }
+
+    private boolean hasMinionRoom(Player player, int amount) {
+        int limit = plugin.getConfig().getInt("limits.summoner_minions", 8);
+        if (minionCount(player) + amount <= limit) return true;
+        player.sendMessage("§cЛимит призывов — " + limit + ". Дождитесь исчезновения старых существ.");
+        return false;
+    }
+
+    private boolean summonHound(Player player) {
+        if (!hasMinionRoom(player, 1)) return false;
+        Vindicator hound = (Vindicator) player.getWorld().spawnEntity(
+                player.getLocation().add(1, 0, 1), EntityType.VINDICATOR);
+        tagMinion(hound, player, "Пожиратель душ", 52.0, 13.0, 0.36, 35);
+        ItemStack axe = new ItemStack(Material.NETHERITE_AXE);
+        axe.addUnsafeEnchantment(Enchantment.SHARPNESS, 4);
+        hound.getEquipment().setItemInMainHand(axe);
+        hound.getEquipment().setItemInMainHandDropChance(0.0f);
         return true;
     }
 
-    private boolean summonSkeletons(Player player) {
-        if (minionCount(player) + 2 > plugin.getConfig().getInt("limits.summoner_minions", 5)) {
-            player.sendMessage("§cДля двух скелетов нужно два свободных места в лимите прислужников.");
-            return false;
-        }
+    private boolean summonArchers(Player player) {
+        if (!hasMinionRoom(player, 2)) return false;
         for (int i = 0; i < 2; i++) {
-            Skeleton skeleton = tagMinion((Skeleton) player.getWorld().spawnEntity(
-                    player.getLocation().add(i == 0 ? 2 : -2, 0, 1), EntityType.SKELETON), player);
-            skeleton.setCustomName("§7Костяной дозор");
-            skeleton.setCustomNameVisible(true);
-            skeleton.setRemoveWhenFarAway(false);
-            skeleton.getEquipment().setItemInMainHand(new ItemStack(Material.BOW));
-            skeleton.getEquipment().setItemInMainHandDropChance(0.0f);
-            skeleton.setTarget(target(player, 24));
-            plugin.getServer().getScheduler().runTaskLater(plugin, () -> {
-                if (skeleton.isValid()) skeleton.remove();
-            }, 25L * 20L);
+            Stray archer = (Stray) player.getWorld().spawnEntity(
+                    player.getLocation().add(i == 0 ? 2 : -2, 0, 2), EntityType.STRAY);
+            tagMinion(archer, player, "Стужник", 34.0, 8.0, 0.30, 35);
+            ItemStack bow = new ItemStack(Material.BOW);
+            bow.addUnsafeEnchantment(Enchantment.POWER, 3);
+            bow.addUnsafeEnchantment(Enchantment.PUNCH, 1);
+            archer.getEquipment().setItemInMainHand(bow);
+            archer.getEquipment().setItemInMainHandDropChance(0.0f);
         }
         return true;
     }
 
-    private boolean summonerChains(Player player) {
-        Location center = player.getTargetBlockExact(20) == null
-                ? player.getLocation().add(player.getLocation().getDirection().multiply(8))
-                : player.getTargetBlockExact(20).getLocation().add(0.5, 0, 0.5);
-        for (Entity entity : center.getWorld().getNearbyEntities(center, 4, 3, 4)) {
-            if (entity instanceof LivingEntity living && living != player) {
-                living.addPotionEffect(new PotionEffect(PotionEffectType.SLOWNESS, 60, 1, false, true));
-                living.addPotionEffect(new PotionEffect(PotionEffectType.WEAKNESS, 80, 0, false, true));
+    private boolean summonKnight(Player player) {
+        if (!hasMinionRoom(player, 1)) return false;
+        WitherSkeleton knight = (WitherSkeleton) player.getWorld().spawnEntity(
+                player.getLocation().add(1, 0, 2), EntityType.WITHER_SKELETON);
+        tagMinion(knight, player, "Рыцарь могилы", 72.0, 16.0, 0.34, 40);
+        EntityEquipment gear = knight.getEquipment();
+        gear.setHelmet(new ItemStack(Material.DIAMOND_HELMET));
+        gear.setChestplate(new ItemStack(Material.DIAMOND_CHESTPLATE));
+        gear.setLeggings(new ItemStack(Material.DIAMOND_LEGGINGS));
+        gear.setBoots(new ItemStack(Material.DIAMOND_BOOTS));
+        ItemStack sword = new ItemStack(Material.NETHERITE_SWORD);
+        sword.addUnsafeEnchantment(Enchantment.SHARPNESS, 4);
+        gear.setItemInMainHand(sword);
+        gear.setHelmetDropChance(0.0f);
+        gear.setChestplateDropChance(0.0f);
+        gear.setLeggingsDropChance(0.0f);
+        gear.setBootsDropChance(0.0f);
+        gear.setItemInMainHandDropChance(0.0f);
+        return true;
+    }
+
+    private boolean summonLegion(Player player) {
+        if (!hasMinionRoom(player, 3)) return false;
+        Ravager beast = (Ravager) player.getWorld().spawnEntity(
+                player.getLocation().add(2, 0, 2), EntityType.RAVAGER);
+        tagMinion(beast, player, "Тварь бездны", 180.0, 22.0, 0.32, 25);
+        beast.addPotionEffect(new PotionEffect(PotionEffectType.RESISTANCE, 25 * 20, 1, true, false));
+        for (int i = 0; i < 2; i++) {
+            WitherSkeleton knight = (WitherSkeleton) player.getWorld().spawnEntity(
+                    player.getLocation().add(i == 0 ? -2 : 3, 0, 1), EntityType.WITHER_SKELETON);
+            tagMinion(knight, player, "Страж бездны", 48.0, 11.0, 0.34, 25);
+            knight.getEquipment().setItemInMainHand(new ItemStack(Material.DIAMOND_SWORD));
+            knight.getEquipment().setHelmet(new ItemStack(Material.CHAINMAIL_HELMET));
+            knight.getEquipment().setChestplate(new ItemStack(Material.CHAINMAIL_CHESTPLATE));
+            knight.getEquipment().setItemInMainHandDropChance(0.0f);
+            knight.getEquipment().setHelmetDropChance(0.0f);
+            knight.getEquipment().setChestplateDropChance(0.0f);
+        }
+        return true;
+    }
+
+    private void updateMinionAI() {
+        for (World world : Bukkit.getWorlds()) {
+            for (Entity entity : world.getEntities()) {
+                if (!(entity instanceof Mob minion)) continue;
+                if (!"minion".equals(entity.getPersistentDataContainer().get(kindKey, PersistentDataType.STRING))) continue;
+                String raw = entity.getPersistentDataContainer().get(ownerKey, PersistentDataType.STRING);
+                if (raw == null) continue;
+                UUID ownerId;
+                try { ownerId = UUID.fromString(raw); } catch (IllegalArgumentException ignored) { continue; }
+                Player owner = Bukkit.getPlayer(ownerId);
+                if (owner == null || !owner.isOnline() || owner.getWorld() != world) {
+                    minion.setTarget(null);
+                    continue;
+                }
+                Player enemy = world.getPlayers().stream()
+                        .filter(candidate -> !candidate.getUniqueId().equals(ownerId))
+                        .filter(candidate -> candidate.getGameMode() != GameMode.SPECTATOR)
+                        .filter(candidate -> candidate.getLocation().distanceSquared(owner.getLocation()) <= 48.0 * 48.0)
+                        .min(Comparator.comparingDouble(candidate ->
+                                candidate.getLocation().distanceSquared(minion.getLocation())))
+                        .orElse(null);
+                LivingEntity current = minion.getTarget();
+                if (current != null && isFriendly(owner, current)) minion.setTarget(null);
+                if (enemy != null) minion.setTarget(enemy);
+                else {
+                    minion.setTarget(null);
+                    if (minion.getLocation().distanceSquared(owner.getLocation()) > 8.0 * 8.0) {
+                        minion.getPathfinder().moveTo(owner.getLocation(), 1.15);
+                    }
+                }
             }
         }
-        center.getWorld().spawnParticle(Particle.SOUL, center, 65, 2, 0.4, 2, 0.04);
+    }
+
+    private boolean druidRootstorm(Player player) {
+        int hits = 0;
+        for (Entity entity : player.getNearbyEntities(7, 4, 7)) {
+            if (!canHit(player, entity)) continue;
+            LivingEntity target = (LivingEntity) entity;
+            target.damage(8.0, player);
+            target.addPotionEffect(new PotionEffect(PotionEffectType.SLOWNESS, 70, 8, true, true));
+            target.addPotionEffect(new PotionEffect(PotionEffectType.JUMP_BOOST, 70, 128, true, true));
+            target.getWorld().spawnParticle(Particle.BLOCK, target.getLocation().add(0, 0.2, 0),
+                    30, 0.7, 0.2, 0.7, Bukkit.createBlockData(Material.MANGROVE_ROOTS));
+            hits++;
+        }
+        player.getWorld().playSound(player.getLocation(), Sound.BLOCK_ROOTED_DIRT_BREAK, 1.4f, 0.6f);
+        player.sendMessage(hits == 0 ? "§7Корни ударили по земле, но врагов рядом нет." : "§aКорни схватили врагов: " + hits);
         return true;
     }
 
-    private boolean summonerRecall(Player player) {
-        List<Entity> minions = ownedEntities(player.getUniqueId(), "minion");
-        int healed = 0;
-        for (int i = 0; i < minions.size(); i++) {
-            Entity minion = minions.get(i);
-            minion.teleport(player.getLocation().clone().add((i % 3) - 1, 0, 1 + i / 3));
-            if (healed < 6) healed++;
+    private boolean druidWildcharge(Player player) {
+        Vector direction = player.getLocation().getDirection().setY(0).normalize();
+        if (direction.lengthSquared() == 0) direction = new Vector(0, 0, 1);
+        player.setVelocity(direction.clone().multiply(1.9).setY(0.42));
+        for (Entity entity : player.getNearbyEntities(12, 3, 12)) {
+            if (!canHit(player, entity)) continue;
+            Vector to = entity.getLocation().toVector().subtract(player.getLocation().toVector());
+            if (to.lengthSquared() < 0.01 || direction.dot(to.normalize()) < 0.72) continue;
+            LivingEntity target = (LivingEntity) entity;
+            target.damage(7.0, player);
+            target.setVelocity(direction.clone().multiply(0.75).setY(0.3));
         }
-        if (healed > 0) heal(player, Math.min(6.0, healed));
+        player.getWorld().spawnParticle(Particle.CLOUD, player.getLocation(), 35, 0.6, 0.4, 0.6, 0.15);
+        player.getWorld().playSound(player.getLocation(), Sound.ENTITY_RAVAGER_ROAR, 1.0f, 1.3f);
         return true;
     }
 
-    private boolean summonGuardian(Player player) {
-        if (minionCount(player) + 1 > plugin.getConfig().getInt("limits.summoner_minions", 5)) {
-            player.sendMessage("§cНет свободного места для голема в лимите прислужников.");
-            return false;
+    private boolean druidSporeburst(Player player) {
+        LivingEntity marked = target(player, 24);
+        Location center = marked != null ? marked.getLocation()
+                : player.getTargetBlockExact(18) != null
+                ? player.getTargetBlockExact(18).getLocation().add(0.5, 1, 0.5)
+                : player.getLocation().add(player.getLocation().getDirection().multiply(9));
+        int hits = 0;
+        for (Entity entity : center.getWorld().getNearbyEntities(center, 5, 4, 5)) {
+            if (!canHit(player, entity)) continue;
+            LivingEntity target = (LivingEntity) entity;
+            target.damage(7.0, player);
+            target.addPotionEffect(new PotionEffect(PotionEffectType.POISON, 100, 1, true, true));
+            target.addPotionEffect(new PotionEffect(PotionEffectType.WEAKNESS, 100, 0, true, true));
+            hits++;
         }
-        IronGolem golem = tagMinion((IronGolem) player.getWorld().spawnEntity(
-                player.getLocation().add(2, 0, 0), EntityType.IRON_GOLEM), player);
-        golem.setPlayerCreated(false);
-        golem.setCustomName("§bДревний страж");
-        golem.setCustomNameVisible(true);
-        golem.setAware(true);
-        golem.addPotionEffect(new PotionEffect(PotionEffectType.RESISTANCE, 300, 0, false, true));
-        plugin.getServer().getScheduler().runTaskLater(plugin, () -> {
-            if (golem.isValid()) golem.remove();
-        }, 15L * 20L);
+        center.getWorld().spawnParticle(Particle.SPORE_BLOSSOM_AIR, center, 100, 3, 1.5, 3, 0.08);
+        center.getWorld().spawnParticle(Particle.CRIT, center, 45, 2, 1, 2, 0.2);
+        center.getWorld().playSound(center, Sound.BLOCK_HONEY_BLOCK_BREAK, 1.3f, 0.6f);
+        player.sendMessage("§aСпоры поразили целей: " + hits);
+        return true;
+    }
+
+    private boolean druidAvatar(Player player) {
+        player.addPotionEffect(new PotionEffect(PotionEffectType.STRENGTH, 180, 1, true, true));
+        player.addPotionEffect(new PotionEffect(PotionEffectType.SPEED, 180, 1, true, true));
+        player.addPotionEffect(new PotionEffect(PotionEffectType.RESISTANCE, 180, 0, true, true));
+        player.addPotionEffect(new PotionEffect(PotionEffectType.REGENERATION, 180, 1, true, true));
+        heal(player, 6.0);
+        player.getWorld().spawnParticle(Particle.TOTEM_OF_UNDYING,
+                player.getLocation().add(0, 1, 0), 55, 1, 1, 1, 0.15);
+        player.getWorld().playSound(player.getLocation(), Sound.ITEM_TOTEM_USE, 1.0f, 0.8f);
         return true;
     }
 
@@ -406,10 +557,10 @@ public final class AbilityEngine {
         ClassType targetClass = data.getClass(targetPlayer.getUniqueId());
         if (targetClass == null) return;
         List<String> skills = switch (targetClass) {
-            case DRUID -> List.of("druid_roots", "druid_dash", "druid_thorn", "druid_bark", "druid_grove");
+            case DRUID -> List.of("druid_rootstorm", "druid_wildcharge", "druid_sporeburst", "druid_avatar");
             case DUELIST -> List.of("duelist_parry", "duelist_lunge", "duelist_challenge", "duelist_whirlwind", "duelist_last");
-            case SUMMONER -> List.of("summoner_wolf", "summoner_skeletons", "summoner_chains", "summoner_recall", "summoner_guardian");
-            case SLAVE_OWNER -> List.of("owner_place", "owner_work", "owner_army", "owner_mega");
+            case SUMMONER -> List.of("summoner_hound", "summoner_archers", "summoner_knight", "summoner_legion");
+            case SLAVE_OWNER -> List.of("owner_work", "owner_army", "owner_mega");
             case CHAMELEON -> List.of("chameleon_camouflage", "chameleon_tongue");
         };
         String selected = skills.get(ThreadLocalRandom.current().nextInt(skills.size()));
