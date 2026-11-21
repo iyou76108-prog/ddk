@@ -620,6 +620,14 @@ public final class VillagerService {
                 healthBonus += milestones * 2.0; // +1 сердце за каждые 50 убийств
                 armorBonus += milestones * 1.0;
             }
+            if (type == ClassType.CHAMELEON) {
+                int leaves = 0;
+                Location center = player.getLocation();
+                for (int x = -3; x <= 3; x++) for (int y = -3; y <= 3; y++) for (int z = -3; z <= 3; z++) {
+                    if (center.clone().add(x, y, z).getBlock().getType().name().endsWith("_LEAVES")) leaves++;
+                }
+                healthBonus += leaves * 0.5;
+            }
 
             double targetHealth = Math.min(2048.0, 20.0 + healthBonus);
             double oldHealth = maxHealth.getBaseValue();
