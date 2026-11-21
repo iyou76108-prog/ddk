@@ -162,7 +162,7 @@ public final class AbilityEngine {
             }
             if (type == ClassType.CHAMELEON) {
                 for (Entity entity : player.getNearbyEntities(24, 12, 24)) {
-                    if (!(entity instanceof Monster monster)) continue;
+                    if (!(entity instanceof Mob monster)) continue;
                     String rawOwner = monster.getPersistentDataContainer().get(ownerKey, PersistentDataType.STRING);
                     boolean necromancerSummon = false;
                     if (rawOwner != null) {
@@ -847,7 +847,7 @@ public final class AbilityEngine {
         if (source instanceof Projectile projectile && projectile.getShooter() instanceof Entity shooter) {
             source = shooter;
         }
-        if (!(source instanceof Monster)) return;
+        if (!(source instanceof Mob)) return;
 
         String ownerRaw = source.getPersistentDataContainer().get(ownerKey, PersistentDataType.STRING);
         if (ownerRaw != null) {
