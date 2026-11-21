@@ -50,7 +50,12 @@ public final class AbilityEngine {
             Map.entry("owner_mega", "cooldowns.slave_owner.mega_villager"),
             Map.entry("chameleon_camouflage", "cooldowns.chameleon.camouflage"),
             Map.entry("chameleon_tongue", "cooldowns.chameleon.tongue"),
-            Map.entry("chameleon_copy", "cooldowns.chameleon.copy")
+            Map.entry("chameleon_copy", "cooldowns.chameleon.copy"),
+            Map.entry("archmage_firebolt", "cooldowns.archmage.firebolt"),
+            Map.entry("archmage_blink", "cooldowns.archmage.blink"),
+            Map.entry("archmage_meteor", "cooldowns.archmage.meteor"),
+            Map.entry("archmage_lava", "cooldowns.archmage.lava"),
+            Map.entry("archmage_golem", "cooldowns.archmage.golem")
     );
 
     public AbilityEngine(SMPClassesPlugin plugin, PlayerDataStore data, VillagerService villagers) {
@@ -107,6 +112,11 @@ public final class AbilityEngine {
             case "owner_mega" -> villagers.startMegaRide(player);
             case "chameleon_camouflage" -> chameleonCamouflage(player);
             case "chameleon_tongue" -> chameleonTongue(player);
+            case "archmage_firebolt" -> archmageFirebolt(player);
+            case "archmage_blink" -> archmageBlink(player);
+            case "archmage_meteor" -> archmageMeteor(player);
+            case "archmage_lava" -> archmageLava(player);
+            case "archmage_golem" -> archmageGolem(player);
             default -> false;
         };
 
@@ -120,6 +130,7 @@ public final class AbilityEngine {
             case SUMMONER -> id.startsWith("summoner_");
             case SLAVE_OWNER -> id.startsWith("owner_");
             case CHAMELEON -> id.startsWith("chameleon_");
+            case ARCHMAGE -> id.startsWith("archmage_");
         };
     }
 
@@ -140,12 +151,22 @@ public final class AbilityEngine {
 
     private void updateClassPassives() {
         for (Player player : Bukkit.getOnlinePlayers()) {
-            if (data.getClass(player.getUniqueId()) != ClassType.DRUID) continue;
-            if (nearForest(player.getLocation())) {
+            ClassType type = data.getClass(player.getUniqueId());
+            if (type == ClassType.DRUID && nearForest(player.getLocation())) {
                 player.addPotionEffect(new PotionEffect(PotionEffectType.REGENERATION, 45, 0, true, false));
                 player.addPotionEffect(new PotionEffect(PotionEffectType.RESISTANCE, 45, 0, true, false));
             }
+            if (type == ClassType.ARCHMAGE && isInLava(player)) {
+                player.addPotionEffect(new PotionEffect(PotionEffectType.FIRE_RESISTANCE, 60, 0, true, false));
+                player.addPotionEffect(new PotionEffect(PotionEffectType.REGENERATION, 60, 2, true, false));
+            }
         }
+    }
+
+    private boolean isInLava(Player player) {
+        Material feet = player.getLocation().getBlock().getType();
+        Material body = player.getLocation().clone().add(0, 1, 0).getBlock().getType();
+        return feet == Material.LAVA || body == Material.LAVA;
     }
 
     private boolean nearForest(Location location) {
@@ -529,6 +550,144 @@ public final class AbilityEngine {
         return true;
     }
 
+    private boolean archmageFirebolt(Player player) {
+        SmallFireball bolt = player.launchProjectile(SmallFireball.class);
+        bolt.setVelocity(player.getEyeLocation().getDirection().normalize().multiply(2.0));
+        bolt.setIsIncendiary(false);
+        bolt.setYield(0.0f);
+        bolt.getPersistentDataContainer().set(projectileKey, PersistentDataType.STRING, "archmage_firebolt");
+        return true;
+    }
+
+    private boolean archmageBlink(Player player) {
+        Location start = player.getLocation().clone();
+        Vector direction = player.getLocation().getDirection().normalize();
+        var hit = player.getWorld().rayTraceBlocks(player.getEyeLocation(), direction, 14.0,
+                FluidCollisionMode.NEVER, true);
+        double distance = hit == null ? 13.0
+                : Math.max(1.0, player.getEyeLocation().toVector().distance(hit.getHitPosition()) - 1.2);
+        Location destination = start.clone().add(direction.multiply(distance));
+        destination.setYaw(start.getYaw());
+        destination.setPitch(start.getPitch());
+        if (!destination.getBlock().isPassable() || !destination.clone().add(0, 1, 0).getBlock().isPassable()) {
+            player.sendMessage("§cТам нет места для телепорта.");
+            return false;
+        }
+        player.getWorld().spawnParticle(Particle.FLAME, start.add(0, 1, 0), 35, 0.5, 0.7, 0.5, 0.08);
+        player.teleport(destination);
+        player.getWorld().spawnParticle(Particle.FLAME, destination.clone().add(0, 1, 0), 40, 0.6, 0.8, 0.6, 0.08);
+        player.getWorld().playSound(destination, Sound.ITEM_FIRECHARGE_USE, 1.0f, 1.2f);
+        return true;
+    }
+
+    private boolean archmageMeteor(Player player) {
+        Location aim = player.getTargetBlockExact(32) != null
+                ? player.getTargetBlockExact(32).getLocation().add(0.5, 1, 0.5)
+                : player.getLocation().add(player.getLocation().getDirection().multiply(20));
+        World world = player.getWorld();
+        Random random = ThreadLocalRandom.current();
+
+        // 20 отдельных метеоров падают с разных сторон в широкой области вокруг прицела.
+        for (int i = 0; i < 20; i++) {
+            double angle = random.nextDouble() * Math.PI * 2.0;
+            double radius = Math.sqrt(random.nextDouble()) * 11.0;
+            double x = aim.getX() + Math.cos(angle) * radius;
+            double z = aim.getZ() + Math.sin(angle) * radius;
+            int groundY = world.getHighestBlockYAt((int) Math.floor(x), (int) Math.floor(z));
+            Location spawn = new Location(world, x, Math.max(groundY + 18, aim.getY() + 18), z);
+            LargeFireball meteor = (LargeFireball) world.spawnEntity(spawn, EntityType.FIREBALL);
+            meteor.setDirection(new Vector((aim.getX() - x) * 0.025, -1.8, (aim.getZ() - z) * 0.025));
+            meteor.setVelocity(new Vector((aim.getX() - x) * 0.025, -1.8, (aim.getZ() - z) * 0.025));
+            meteor.setShooter(player);
+            meteor.setIsIncendiary(false);
+            meteor.setYield(0.0f);
+            meteor.getPersistentDataContainer().set(projectileKey, PersistentDataType.STRING, "archmage_meteor");
+        }
+        world.playSound(aim, Sound.ENTITY_WITHER_SPAWN, 2.0f, 0.7f);
+        world.spawnParticle(Particle.FLAME, aim.clone().add(0, 12, 0), 180, 10, 5, 10, 0.25);
+        return true;
+    }
+
+    private boolean archmageLava(Player player) {
+        Location center = player.getTargetBlockExact(24) != null
+                ? player.getTargetBlockExact(24).getLocation().add(0.5, 1, 0.5)
+                : player.getLocation().add(player.getLocation().getDirection().multiply(8));
+        World world = center.getWorld();
+        UUID owner = player.getUniqueId();
+        final int[] ticks = {0};
+
+        plugin.getServer().getScheduler().runTaskTimer(plugin, task -> {
+            if (ticks[0]++ >= 10 || !player.isOnline() || player.getWorld() != world) {
+                task.cancel();
+                return;
+            }
+            for (int x = -5; x <= 5; x++) for (int z = -5; z <= 5; z++) {
+                if (x * x + z * z > 25) continue;
+                Location particleAt = center.clone().add(x + 0.5, 0.15, z + 0.5);
+                world.spawnParticle(Particle.LAVA, particleAt, 2, 0.15, 0.02, 0.15, 0.01);
+                world.spawnParticle(Particle.FLAME, particleAt, 1, 0.1, 0.02, 0.1, 0.01);
+            }
+            for (Entity entity : world.getNearbyEntities(center, 5.0, 2.5, 5.0)) {
+                if (!(entity instanceof LivingEntity living) || entity.getUniqueId().equals(owner)) continue;
+                if (entity instanceof Player other && data.getClass(other.getUniqueId()) == ClassType.ARCHMAGE
+                        && other.getUniqueId().equals(owner)) continue;
+                living.damage(2.0, player);
+                living.setFireTicks(Math.max(living.getFireTicks(), 60));
+            }
+        }, 0L, 20L);
+        world.playSound(center, Sound.BLOCK_LAVA_POP, 2.0f, 0.7f);
+        return true;
+    }
+
+    private boolean archmageGolem(Player player) {
+        IronGolem golem = (IronGolem) player.getWorld().spawnEntity(
+                player.getLocation().clone().add(2, 0, 0), EntityType.IRON_GOLEM);
+        golem.getPersistentDataContainer().set(ownerKey, PersistentDataType.STRING, player.getUniqueId().toString());
+        golem.getPersistentDataContainer().set(kindKey, PersistentDataType.STRING, "archmage_golem");
+        golem.setPersistent(true);
+        golem.setCustomName("§6Голем магмы §7(" + player.getName() + ")");
+        golem.setCustomNameVisible(true);
+        golem.setPlayerCreated(false);
+        golem.getAttribute(Attribute.MAX_HEALTH).setBaseValue(120.0);
+        golem.setHealth(120.0);
+        golem.getAttribute(Attribute.ATTACK_DAMAGE).setBaseValue(15.0);
+        golem.getAttribute(Attribute.MOVEMENT_SPEED).setBaseValue(0.28);
+        golem.getEquipment().setHelmet(new ItemStack(Material.NETHERITE_HELMET));
+        golem.getEquipment().setChestplate(new ItemStack(Material.NETHERITE_CHESTPLATE));
+        golem.getEquipment().setHelmetDropChance(0.0f);
+        golem.getEquipment().setChestplateDropChance(0.0f);
+
+        final int[] ticks = {0};
+        plugin.getServer().getScheduler().runTaskTimer(plugin, task -> {
+            if (!golem.isValid() || golem.isDead() || !player.isOnline() || ticks[0] >= 25) {
+                task.cancel();
+                if (golem.isValid()) golem.remove();
+                return;
+            }
+            ticks[0]++;
+            Player target = player.getWorld().getPlayers().stream()
+                    .filter(candidate -> !candidate.getUniqueId().equals(player.getUniqueId()))
+                    .filter(candidate -> candidate.getGameMode() != GameMode.SPECTATOR)
+                    .min(Comparator.comparingDouble(candidate -> candidate.getLocation().distanceSquared(golem.getLocation())))
+                    .orElse(null);
+            if (target != null) {
+                golem.setTarget(target);
+                if (ticks[0] % 4 == 0 && target.getLocation().distanceSquared(golem.getLocation()) <= 36.0) {
+                    target.addPotionEffect(new PotionEffect(PotionEffectType.SLOWNESS, 20, 2, true, true));
+                    target.setFireTicks(Math.max(target.getFireTicks(), 80));
+                    target.getWorld().spawnParticle(Particle.FLAME, target.getLocation().add(0, 1, 0),
+                            25, 0.4, 0.7, 0.4, 0.08);
+                }
+            } else {
+                golem.setTarget(null);
+                if (golem.getLocation().distanceSquared(player.getLocation()) > 16.0) {
+                    golem.getPathfinder().moveTo(player.getLocation(), 1.1);
+                }
+            }
+        }, 0L, 20L);
+        return true;
+    }
+
     private boolean chameleonCamouflage(Player player) {
         player.addPotionEffect(new PotionEffect(PotionEffectType.INVISIBILITY, 80, 0, false, false));
         player.addPotionEffect(new PotionEffect(PotionEffectType.SPEED, 80, 1, false, true));
@@ -562,6 +721,8 @@ public final class AbilityEngine {
             case SUMMONER -> List.of("summoner_hound", "summoner_archers", "summoner_knight", "summoner_legion");
             case SLAVE_OWNER -> List.of("owner_work", "owner_army", "owner_mega");
             case CHAMELEON -> List.of("chameleon_camouflage", "chameleon_tongue");
+            case ARCHMAGE -> List.of("archmage_firebolt", "archmage_blink", "archmage_meteor",
+                    "archmage_lava", "archmage_golem");
         };
         String selected = skills.get(ThreadLocalRandom.current().nextInt(skills.size()));
         long expiry = System.currentTimeMillis() + plugin.getConfig().getLong("durations.copied_skill", 80) * 1000L;
@@ -634,10 +795,28 @@ public final class AbilityEngine {
     }
 
     public void handleChameleonPassive(EntityDamageByEntityEvent event) {
-        if (event.getEntity() instanceof Player player
-                && data.getClass(player.getUniqueId()) == ClassType.CHAMELEON
-                && event.getDamager() instanceof Monster) {
-            event.setCancelled(true);
+        if (!(event.getEntity() instanceof Player player)
+                || data.getClass(player.getUniqueId()) != ClassType.CHAMELEON) return;
+
+        Entity source = event.getDamager();
+        if (source instanceof Projectile projectile && projectile.getShooter() instanceof Entity shooter) {
+            source = shooter;
         }
+        if (!(source instanceof Monster)) return;
+
+        String ownerRaw = source.getPersistentDataContainer().get(ownerKey, PersistentDataType.STRING);
+        if (ownerRaw != null) {
+            try {
+                UUID ownerId = UUID.fromString(ownerRaw);
+                if (data.getClass(ownerId) == ClassType.SUMMONER
+                        && "minion".equals(source.getPersistentDataContainer().get(kindKey, PersistentDataType.STRING))) {
+                    event.setDamage(event.getDamage() * 0.10);
+                    return;
+                }
+            } catch (IllegalArgumentException ignored) {
+                // Неизвестная метка владельца: рассматриваем существо как обычного моба.
+            }
+        }
+        event.setCancelled(true);
     }
 }
