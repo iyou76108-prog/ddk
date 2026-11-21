@@ -41,13 +41,22 @@ public final class AbilityItems {
     }
 
     public ItemStack[] forClass(ClassType type) {
-        return switch (type) {
+        return forClass(type, null);
+    }
+
+    public ItemStack[] forClass(ClassType type, String copiedAbilityId) {
+        ItemStack[] result = switch (type) {
             case DRUID -> new ItemStack[] {
-                    create("druid_roots", Material.MANGROVE_ROOTS, "Корни земли", "Опутать цель на 2,5 секунды"),
-                    create("druid_dash", Material.FEATHER, "Порыв чащи", "Рывок вперёд до 9 блоков"),
-                    create("druid_thorn", Material.POISONOUS_POTATO, "Шипастая лоза", "Снаряд: урон и отравление"),
-                    create("druid_bark", Material.OAK_LOG, "Кора древних", "Поглощение и сопротивление"),
-                    create("druid_grove", Material.GOLDEN_APPLE, "Сердце рощи", "Исцелить себя и союзников")
+                    createPassive("druid_passive", Material.OAK_SAPLING, "Благословение чащи",
+                            "Регенерация и сопротивление рядом с листвой"),
+                    create("druid_rootstorm", Material.MANGROVE_ROOTS, "Гнев корней",
+                            "Корни хватают врагов в радиусе 7 блоков, наносят урон и держат 3 секунды"),
+                    create("druid_wildcharge", Material.RAVAGER_SPAWN_EGG, "Звериный рывок",
+                            "Рывок на 12 блоков, урон и отбрасывание врагов на пути"),
+                    create("druid_sporeburst", Material.FIREWORK_STAR, "Споровый шторм",
+                            "Взрыв спор вокруг цели: урон, яд и слабость"),
+                    create("druid_avatar", Material.NETHER_STAR, "Аватар леса",
+                            "На 9 секунд: сила II, скорость II, сопротивление и регенерация")
             };
             case DUELIST -> new ItemStack[] {
                     create("duelist_parry", Material.SHIELD, "Идеальное парирование", "Стойка и контратака"),
@@ -57,26 +66,61 @@ public final class AbilityItems {
                     create("duelist_last", Material.NETHER_STAR, "Последний раунд", "Боевые эффекты на 6 секунд")
             };
             case SUMMONER -> new ItemStack[] {
-                    create("summoner_wolf", Material.WOLF_SPAWN_EGG, "Спутник души", "Призвать волка на 35 секунд"),
-                    create("summoner_skeletons", Material.SKELETON_SPAWN_EGG, "Костяной дозор", "Призвать двух скелетов"),
-                    create("summoner_chains", Material.IRON_BARS, "Цепи могилы", "Замедлить врагов в области"),
-                    create("summoner_recall", Material.SOUL_LANTERN, "Перекличка душ", "Вернуть прислужников к себе"),
-                    create("summoner_guardian", Material.IRON_BLOCK, "Древний страж", "Призвать железного голема")
+                    createPassive("summoner_bond", Material.SOUL_LANTERN, "Некротический пакт",
+                            "Призывы получают усиление, не атакуют хозяина и союзных призывов"),
+                    create("summoner_hound", Material.WITHER_SKELETON_SPAWN_EGG, "Пожиратель душ",
+                            "Призывает усиленного Пожирателя — элитного ближнего бойца"),
+                    create("summoner_archers", Material.STRAY_SPAWN_EGG, "Морозный дозор",
+                            "Призывает двух усиленных Стужников-лучников"),
+                    create("summoner_knight", Material.NETHERITE_SWORD, "Рыцарь могилы",
+                            "Призывает бронированного визер-скелета"),
+                    create("summoner_legion", Material.RAVAGER_SPAWN_EGG, "Легион бездны",
+                            "Призывает Тварь бездны и двух рыцарей на 25 секунд")
             };
             case SLAVE_OWNER -> new ItemStack[] {
-                    create("owner_place", Material.RED_BANNER, "Моё место", "Поставить или убрать флаг деревни"),
-                    create("owner_work", Material.WRITABLE_BOOK, "Работайте за меня", "Открыть управление работой жителей"),
-                    create("owner_army", Material.IRON_SWORD, "Армия", "Призвать 15 бойцов на 23 секунды"),
-                    create("owner_mega", Material.SADDLE, "Мега житель", "Оседлать башню из трёх жителей"),
-                    createPassive("owner_passive", Material.HEART_OF_THE_SEA, "Возьму взамен", "+2 сердца и +0,5 брони за каждого вашего жителя")
+                    create("owner_place", Material.RED_BANNER, "Моё место", "Поставить или поднять флаг деревни"),
+                    create("owner_work", Material.WRITABLE_BOOK, "Работайте за меня", "Выбрать профессию для жителя"),
+                    create("owner_army", Material.IRON_SWORD, "Армия", "15 бойцов на 20 секунд; ПКМ по игроку исключает его из целей"),
+                    create("owner_mega", Material.SADDLE, "Мега житель", "Оседлать одного жителя на 15 секунд; WASD — движение"),
+                    createPassive("owner_passive", Material.HEART_OF_THE_SEA, "Возьму взамен",
+                            "+2 сердца и +0,5 брони за каждого принадлежащего жителя")
             };
             case CHAMELEON -> new ItemStack[] {
                     create("chameleon_camouflage", Material.LIME_DYE, "Мой окрас", "Невидимость на 4 секунды и скорость II"),
                     createPassive("chameleon_passive", Material.FERN, "Свой среди чужих", "Враждебные мобы не выбирают вас целью"),
                     create("chameleon_tongue", Material.SNOWBALL, "Лизнуть языком", "Подтянуться к точке до 33 блоков"),
                     createPassive("chameleon_life", Material.OAK_LEAVES, "Живучесть", "+0,5 максимального здоровья за блок листвы рядом"),
-                    create("chameleon_copy", Material.AMETHYST_SHARD, "Копирование", "Скопировать способность цели на 80 секунд")
+                    create("chameleon_copy", Material.AMETHYST_SHARD, "Копирование", "Скопировать случайную способность игрока на 80 секунд")
             };
+        };
+        if (type == ClassType.CHAMELEON && copiedAbilityId != null) {
+            ItemStack copied = abilityItem(copiedAbilityId);
+            if (copied != null) result[4] = copied;
+        }
+        return result;
+    }
+
+    public ItemStack abilityItem(String id) {
+        return switch (id) {
+            case "druid_rootstorm" -> create(id, Material.MANGROVE_ROOTS, "Гнев корней", "Скопированная способность друида");
+            case "druid_wildcharge" -> create(id, Material.RAVAGER_SPAWN_EGG, "Звериный рывок", "Скопированная способность друида");
+            case "druid_sporeburst" -> create(id, Material.FIREWORK_STAR, "Споровый шторм", "Скопированная способность друида");
+            case "druid_avatar" -> create(id, Material.NETHER_STAR, "Аватар леса", "Скопированная способность друида");
+            case "duelist_parry" -> create(id, Material.SHIELD, "Идеальное парирование", "Скопированная способность дуэлянта");
+            case "duelist_lunge" -> create(id, Material.IRON_SWORD, "Быстрый выпад", "Скопированная способность дуэлянта");
+            case "duelist_challenge" -> create(id, Material.TARGET, "Вызов на дуэль", "Скопированная способность дуэлянта");
+            case "duelist_whirlwind" -> create(id, Material.IRON_AXE, "Вихрь клинков", "Скопированная способность дуэлянта");
+            case "duelist_last" -> create(id, Material.NETHER_STAR, "Последний раунд", "Скопированная способность дуэлянта");
+            case "summoner_hound" -> create(id, Material.WITHER_SKELETON_SPAWN_EGG, "Пожиратель душ", "Скопированная способность призывателя");
+            case "summoner_archers" -> create(id, Material.STRAY_SPAWN_EGG, "Морозный дозор", "Скопированная способность призывателя");
+            case "summoner_knight" -> create(id, Material.NETHERITE_SWORD, "Рыцарь могилы", "Скопированная способность призывателя");
+            case "summoner_legion" -> create(id, Material.RAVAGER_SPAWN_EGG, "Легион бездны", "Скопированная способность призывателя");
+            case "owner_work" -> create(id, Material.WRITABLE_BOOK, "Работайте за меня", "Скопированная способность помещика");
+            case "owner_army" -> create(id, Material.IRON_SWORD, "Армия", "Скопированная способность помещика");
+            case "owner_mega" -> create(id, Material.SADDLE, "Мега житель", "Скопированная способность помещика");
+            case "chameleon_camouflage" -> create(id, Material.LIME_DYE, "Мой окрас", "Скопированная способность хамелеона");
+            case "chameleon_tongue" -> create(id, Material.SNOWBALL, "Лизнуть языком", "Скопированная способность хамелеона");
+            default -> null;
         };
     }
 }
