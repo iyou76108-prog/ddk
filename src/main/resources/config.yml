@@ -1,0 +1,45 @@
+# Все значения времени указаны в секундах.
+cooldowns:
+  druid:
+    roots: 24
+    dash: 18
+    thorn: 28
+    bark: 38
+    grove: 65
+  duelist:
+    parry: 18
+    lunge: 16
+    challenge: 32
+    whirlwind: 25
+    last_round: 70
+  summoner:
+    wolf: 35
+    skeletons: 55
+    chains: 30
+    recall: 40
+    guardian: 95
+  slave_owner:
+    place: 90
+    work_order: 10
+    army: 120
+    mega_villager: 75
+  chameleon:
+    camouflage: 22
+    tongue: 28
+    copy: 120
+
+durations:
+  army: 23
+  mega_villager: 15
+  camouflage: 4
+  copied_skill: 80
+
+limits:
+  village_villagers: 8
+  summoner_minions: 5
+  tongue_range: 33
+  tongue_speed_blocks_per_second: 2
+  work_radius: 180
+
+messages:
+  prefix: "§8[§aКлассы§8] §r"
