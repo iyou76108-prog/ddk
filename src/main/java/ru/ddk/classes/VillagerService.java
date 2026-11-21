@@ -183,9 +183,8 @@ public final class VillagerService {
 
     public boolean handleFlagInteract(Player player, Entity entity) {
         if (!"flag".equals(kindOf(entity)) || !player.getUniqueId().equals(ownerOf(entity))) return false;
-        ItemStack bread = findIngredient(player, Material.BREAD, 20);
-        ItemStack carrots = findIngredient(player, Material.CARROT, 20);
-        if (bread == null || carrots == null) {
+        if (countIngredient(player, Material.BREAD) < 20
+                || countIngredient(player, Material.CARROT) < 20) {
             player.sendMessage("§cДля улучшения флага нужно 20 хлеба И 20 моркови.");
             return true;
         }
@@ -196,21 +195,23 @@ public final class VillagerService {
             player.sendMessage("§cДеревня уже достигла лимита " + max + " жителей.");
             return true;
         }
-        bread.setAmount(bread.getAmount() - 20);
-        carrots.setAmount(carrots.getAmount() - 20);
+        removeIngredient(player, Material.BREAD, 20);
+        removeIngredient(player, Material.CARROT, 20);
         Location spawn = entity.getLocation().clone().add(1.5, 0, 0.5);
         spawnVillager(player, spawn, "village");
         player.sendMessage("§aФлаг улучшен: появился новый житель. Деревня: " + (count + 1) + "/" + max + ".");
         return true;
     }
 
-    private ItemStack findIngredient(Player player, Material material, int amount) {
+    private int countIngredient(Player player, Material material) {
         int total = 0;
         for (ItemStack item : player.getInventory().getStorageContents()) {
             if (item != null && item.getType() == material) total += item.getAmount();
         }
-        if (total < amount) return null;
+        return total;
+    }
 
+    private void removeIngredient(Player player, Material material, int amount) {
         int remaining = amount;
         for (ItemStack item : player.getInventory().getStorageContents()) {
             if (item == null || item.getType() != material) continue;
@@ -219,7 +220,6 @@ public final class VillagerService {
             remaining -= remove;
             if (remaining == 0) break;
         }
-        return new ItemStack(material, amount);
     }
 
     private String roleForTool(Material type) {
