@@ -432,9 +432,10 @@ public final class AbilityEngine {
             if (until != null && until >= System.currentTimeMillis()
                     && event.getDamager() instanceof Player attacker) {
                 event.setDamage(event.getDamage() * 0.4);
+                // Удаляем стойку до контратаки, чтобы два парирующих дуэлянта не зациклили урон.
+                parryUntil.remove(defender.getUniqueId());
                 attacker.damage(4.0, defender);
                 defender.getWorld().spawnParticle(Particle.CRIT, defender.getLocation().add(0, 1, 0), 15, 0.4, 0.6, 0.4, 0.2);
-                parryUntil.remove(defender.getUniqueId());
             }
         }
         if (event.getDamager() instanceof Player attacker) {
