@@ -7,7 +7,8 @@ public enum ClassType {
     DUELIST("Дуэлянт", Material.IRON_SWORD),
     SUMMONER("Призыватель", Material.SOUL_LANTERN),
     SLAVE_OWNER("Рабовладелец", Material.VILLAGER_SPAWN_EGG),
-    CHAMELEON("Хамелеон", Material.LIME_DYE);
+    CHAMELEON("Хамелеон", Material.LIME_DYE),
+    ARCHMAGE("Архимаг", Material.BLAZE_ROD);
 
     private final String displayName;
     private final Material icon;
@@ -33,6 +34,7 @@ public enum ClassType {
             case "summoner", "призыватель" -> SUMMONER;
             case "slave_owner", "slaveowner", "рабовладелец" -> SLAVE_OWNER;
             case "chameleon", "хамелеон" -> CHAMELEON;
+            case "archmage", "архимаг", "маг" -> ARCHMAGE;
             default -> null;
         };
     }
