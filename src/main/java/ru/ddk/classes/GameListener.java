@@ -34,7 +34,7 @@ public final class GameListener implements Listener, CommandExecutor {
         this.abilities = abilities;
         this.villagers = villagers;
         this.classMenuKey = new NamespacedKey(plugin, "class_menu");
-        plugin.getServer().getScheduler().runTaskTimer(plugin, this::refreshChameleonCopySlots, 20L, 20L);
+        plugin.getServer().getScheduler().runTaskTimer(plugin, this::refreshDynamicAbilitySlots, 20L, 20L);
     }
 
     @EventHandler
@@ -82,6 +82,7 @@ public final class GameListener implements Listener, CommandExecutor {
         }
         data.saveHotbar(player.getUniqueId(), current);
         ItemStack[] panel = items.forClass(type, abilities.getCopiedSkillId(player.getUniqueId()));
+        if (type == ClassType.SLAVE_OWNER) panel[1] = items.abilityItem(abilities.getOwnerSlotAbilityId(player.getUniqueId()));
         player.getInventory().setContents(replaceHotbar(player.getInventory().getContents(), panel));
         data.setPanelActive(player.getUniqueId(), true);
         player.sendMessage("§aПанель способностей включена. Выберите слот 1–5 и нажмите ПКМ. F — вернуть инвентарь.");
@@ -114,6 +115,7 @@ public final class GameListener implements Listener, CommandExecutor {
         event.setCancelled(true);
         abilities.cast(player, abilityId);
         refreshChameleonCopySlot(player);
+        refreshSlaveOwnerSlot(player);
     }
 
     @EventHandler
@@ -150,6 +152,11 @@ public final class GameListener implements Listener, CommandExecutor {
 
     @EventHandler
     public void onDamage(EntityDamageByEntityEvent event) {
+        Entity heldBy = event.getDamager();
+        if (heldBy instanceof Projectile projectile && projectile.getShooter() instanceof Player shooter) heldBy = shooter;
+        String heldAbilityId = heldBy instanceof Player attacker
+                ? items.getAbilityId(attacker.getInventory().getItemInMainHand()) : null;
+        abilities.handleSlaveOwnerCombat(event, heldAbilityId);
         abilities.handleDamage(event);
         abilities.handleChameleonPassive(event);
 
@@ -231,8 +238,23 @@ public final class GameListener implements Listener, CommandExecutor {
         abilities.handleProjectileHit(event);
     }
 
-    private void refreshChameleonCopySlots() {
-        for (Player player : Bukkit.getOnlinePlayers()) refreshChameleonCopySlot(player);
+    private void refreshDynamicAbilitySlots() {
+        for (Player player : Bukkit.getOnlinePlayers()) {
+            refreshChameleonCopySlot(player);
+            refreshSlaveOwnerSlot(player);
+        }
+    }
+
+    private void refreshSlaveOwnerSlot(Player player) {
+        if (!data.isPanelActive(player.getUniqueId())
+                || data.getClass(player.getUniqueId()) != ClassType.SLAVE_OWNER) return;
+        ItemStack expected = items.abilityItem(abilities.getOwnerSlotAbilityId(player.getUniqueId()));
+        String expectedId = items.getAbilityId(expected);
+        String currentId = items.getAbilityId(player.getInventory().getItem(1));
+        if (!Objects.equals(expectedId, currentId)) {
+            player.getInventory().setItem(1, expected);
+            player.updateInventory();
+        }
     }
 
     private void refreshChameleonCopySlot(Player player) {
