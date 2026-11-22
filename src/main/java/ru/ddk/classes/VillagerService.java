@@ -745,14 +745,13 @@ public final class VillagerService {
 
                 Material tool = villager.getEquipment().getItemInMainHand().getType();
                 int tier = toolTier(tool, role);
-                theProductionInterval(villager);
-                nextWorkAt.put(villager.getUniqueId(), now + theProductionInterval(villager));
+                nextWorkAt.put(villager.getUniqueId(), now + productionIntervalMillis());
                 addPassiveProfessionLoot(villager, role, tier);
             }
         }
     }
 
-    private long theProductionInterval(Villager villager) {
+    private long productionIntervalMillis() {
         // Все добывающие профессии производят очередную партию раз в 7 секунд.
         return Math.max(1L, plugin.getConfig().getLong("production.interval_seconds", 7L)) * 1000L;
     }
