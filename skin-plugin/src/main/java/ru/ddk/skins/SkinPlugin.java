@@ -58,28 +58,91 @@ public final class SkinPlugin extends JavaPlugin implements Listener, CommandExe
     private YamlConfiguration db;
     private File dbFile;
     private NamespacedKey skinTag;
+    private NamespacedKey keyTag;
+    private NamespacedKey adminSkinTag;
 
     @Override public void onEnable() {
         getDataFolder().mkdirs();
         dbFile = new File(getDataFolder(), "skins.yml");
         db = YamlConfiguration.loadConfiguration(dbFile);
         skinTag = new NamespacedKey(this, "skin_id");
+        keyTag = new NamespacedKey(this, "case_key");
+        adminSkinTag = new NamespacedKey(this, "admin_skin_id");
         getServer().getPluginManager().registerEvents(this, this);
-        getCommand("case").setExecutor(this);
-        getCommand("skin").setExecutor(this);
+        Objects.requireNonNull(getCommand("case")).setExecutor(this);
+        Objects.requireNonNull(getCommand("skin")).setExecutor(this);
+        Objects.requireNonNull(getCommand("skinadmin")).setExecutor(this);
+        Objects.requireNonNull(getCommand("key")).setExecutor(this);
         getLogger().info("SMPClassSkins включён: " + SKINS.size() + " скинов.");
     }
 
     @Override public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
-        if (!(sender instanceof Player p)) { sender.sendMessage("Команда доступна только игроку."); return true; }
-        if (command.getName().equalsIgnoreCase("case")) openCase(p); else openCategories(p);
+        String name = command.getName().toLowerCase(Locale.ROOT);
+        if (name.equals("key")) {
+            if (!sender.hasPermission("smpclassskins.admin")) {
+                sender.sendMessage("§cНедостаточно прав.");
+                return true;
+            }
+            if (args.length < 1 || args.length > 2) {
+                sender.sendMessage("§eИспользование: /key <ник> [количество]");
+                return true;
+            }
+            Player target = Bukkit.getPlayerExact(args[0]);
+            if (target == null) {
+                sender.sendMessage("§cИгрок должен быть онлайн.");
+                return true;
+            }
+            int amount = 1;
+            if (args.length == 2) {
+                try { amount = Integer.parseInt(args[1]); }
+                catch (NumberFormatException ex) { sender.sendMessage("§cКоличество должно быть числом."); return true; }
+            }
+            if (amount < 1 || amount > 64) {
+                sender.sendMessage("§cМожно выдать от 1 до 64 ключей за раз.");
+                return true;
+            }
+            giveKeys(target, amount);
+            sender.sendMessage("§aВыдано ключей игроку §f" + target.getName() + "§a: §e" + amount);
+            target.sendMessage("§aАдминистратор выдал тебе ключей кейса: §e" + amount);
+            return true;
+        }
+
+        if (!(sender instanceof Player p)) {
+            sender.sendMessage("§cЭта команда доступна только игроку.");
+            return true;
+        }
+        if (name.equals("case")) {
+            openCase(p);
+        } else if (name.equals("skin")) {
+            openCategories(p);
+        } else if (name.equals("skinadmin")) {
+            if (!p.hasPermission("smpclassskins.admin")) {
+                p.sendMessage("§cНедостаточно прав.");
+                return true;
+            }
+            if (args.length > 1) {
+                p.sendMessage("§eИспользование: /skinadmin [ник]");
+                return true;
+            }
+            Player target = args.length == 0 ? p : Bukkit.getPlayerExact(args[0]);
+            if (target == null) {
+                p.sendMessage("§cИгрок должен быть онлайн. Использование: /skinadmin <ник>");
+                return true;
+            }
+            openAdminSkins(p, target);
+        }
         return true;
     }
 
     @EventHandler public void onJoin(PlayerJoinEvent e) {
         Bukkit.getScheduler().runTaskLater(this, () -> {
-            Player p = e.getPlayer(); int pending = db.getInt(path(p) + ".pending", 0);
-            if (pending > 0) { giveDiamonds(p, pending); db.set(path(p) + ".pending", 0); saveDb(); p.sendMessage("§eПрерванное открытие кейса отменено. Возвращено алмазов: §b" + pending); }
+            Player p = e.getPlayer(); int pending = db.getInt(path(p) + ".pending_keys", 0);
+            if (pending > 0) {
+                giveKeys(p, pending);
+                db.set(path(p) + ".pending_keys", 0);
+                saveDb();
+                p.sendMessage("§eОткрытие кейса было прервано выходом. Возвращено ключей: §b" + pending);
+            }
             applyAll(p);
         }, 2L);
     }
@@ -108,9 +171,18 @@ public final class SkinPlugin extends JavaPlugin implements Listener, CommandExe
     private void openCase(Player p) {
         Menu m = new Menu(p.getUniqueId(), "case", null);
         Inventory inv = Bukkit.createInventory(m, 27, "§8✦ §6КЕЙС СО СКИНАМИ"); m.inv = inv; frame(inv);
-        inv.setItem(11, item(Material.TRIPWIRE_HOOK, "§eО кейсе", "§7Внутри 2D и 3D скины", "§7для оружия, инструментов и брони", "", "§7Цена: §b1 алмаз", "§8Дубликат вернёт 2 алмаза"));
-        inv.setItem(13, item(Material.ENDER_CHEST, "§6§lОТКРЫТЬ КЕЙС", "§7Нажми, чтобы испытать удачу", "", "§fЦена: §b1 алмаз", "§eНажми для открытия"));
-        inv.setItem(15, item(Material.BOOK, "§aМоя коллекция", "§7Открыто: §f" + owned(p).size() + "§7/§f" + SKINS.size(), "", "§eНажми, чтобы выбрать скин"));
+        inv.setItem(11, item(Material.TRIPWIRE_HOOK, "§eО кейсе",
+                "§7Внутри 2D и 3D скины",
+                "§7для оружия, инструментов и брони",
+                "", "§7Открытие: §a1 ключ",
+                "§8Дубликат возвращает ключ"));
+        inv.setItem(13, item(Material.ENDER_CHEST, "§6§lОТКРЫТЬ КЕЙС",
+                "§7Нажми, чтобы испытать удачу", "",
+                "§fТвои ключи: §e" + countKeys(p),
+                "§eНажми для открытия"));
+        inv.setItem(15, item(Material.BOOK, "§aМоя коллекция",
+                "§7Открыто: §f" + owned(p).size() + "§7/§f" + SKINS.size(), "",
+                "§eНажми, чтобы выбрать скин"));
         p.openInventory(inv);
     }
 
@@ -132,6 +204,36 @@ public final class SkinPlugin extends JavaPlugin implements Listener, CommandExe
         inv.setItem(44, item(Material.ARROW, "§7Назад к кейсу", "§eНажми, чтобы вернуться")); p.openInventory(inv);
     }
 
+    private void openAdminSkins(Player admin, Player target) {
+        Menu m = new Menu(admin.getUniqueId(), "admin", null, target.getUniqueId(), target.getName());
+        Inventory inv = Bukkit.createInventory(m, 54, "§8✦ §4ВЫДАЧА СКИНОВ");
+        m.inv = inv;
+        frame(inv);
+        inv.setItem(4, item(Material.PLAYER_HEAD, "§eИгрок: §f" + target.getName(),
+                "§7Нажми на любой скин ниже, чтобы выдать его.",
+                "§7Уже открытые скины повторно не выдаются."));
+        int[] slots = {10,11,12,13,14,15,16,19,20,21,22,23,24,25,28,29,30,31,32,33,34};
+        int index = 0;
+        List<String> unlocked = owned(target.getUniqueId());
+        for (Skin s : SKINS) {
+            if (index >= slots.length) break;
+            ItemStack icon = new ItemStack(s.icon);
+            ItemMeta meta = icon.getItemMeta();
+            meta.setDisplayName(s.rarity + "§l" + s.name);
+            meta.setLore(List.of(
+                    "§7ID: §f" + s.id,
+                    "§7Тип: " + (s.threeD ? "§b3D-модель" : "§a2D-текстура"),
+                    unlocked.contains(s.id) ? "§aУже есть у игрока" : "§eНажми, чтобы выдать"
+            ));
+            meta.setItemModel(new NamespacedKey("smpskins", "skin/" + s.id));
+            meta.getPersistentDataContainer().set(adminSkinTag, PersistentDataType.STRING, s.id);
+            icon.setItemMeta(meta);
+            inv.setItem(slots[index++], icon);
+        }
+        inv.setItem(49, item(Material.BARRIER, "§cЗакрыть панель", "§eНажми, чтобы закрыть"));
+        admin.openInventory(inv);
+    }
+
     private void openSkinList(Player p, String category) {
         Menu m = new Menu(p.getUniqueId(), "skins", category);
         Inventory inv = Bukkit.createInventory(m, 54, "§8Скины: " + categoryName(category)); m.inv = inv; frame(inv);
@@ -149,6 +251,30 @@ public final class SkinPlugin extends JavaPlugin implements Listener, CommandExe
     }
 
     private void clickMenu(Player p, Menu m, int slot) {
+        if (!m.owner.equals(p.getUniqueId())) return;
+        if (m.type.equals("admin")) {
+            if (slot == 49) { p.closeInventory(); return; }
+            if (m.target == null) return;
+            ItemStack clicked = m.inv.getItem(slot);
+            if (clicked == null || !clicked.hasItemMeta()) return;
+            String skinId = clicked.getItemMeta().getPersistentDataContainer().get(adminSkinTag, PersistentDataType.STRING);
+            Skin selected = skinId == null ? null : find(skinId);
+            if (selected == null) return;
+            List<String> unlocked = owned(m.target);
+            if (unlocked.contains(selected.id)) {
+                p.sendMessage("§eУ игрока §f" + m.targetName + " §eуже есть скин §f" + selected.name + "§e.");
+                return;
+            }
+            unlocked.add(selected.id);
+            db.set(path(m.target) + ".owned", unlocked);
+            saveDb();
+            Player target = Bukkit.getPlayer(m.target);
+            if (target != null) target.sendMessage("§aАдминистратор выдал тебе скин: " + selected.rarity + selected.name);
+            p.sendMessage("§aВыдан скин §f" + selected.name + " §aигроку §f" + m.targetName + "§a.");
+            p.playSound(p.getLocation(), Sound.ENTITY_EXPERIENCE_ORB_PICKUP, 0.8f, 1.4f);
+            openAdminSkins(p, target != null ? target : p);
+            return;
+        }
         if (m.type.equals("case")) {
             if (slot == 13) openCaseRoll(p, m.inv);
             else if (slot == 15) openCategories(p);
@@ -182,16 +308,31 @@ public final class SkinPlugin extends JavaPlugin implements Listener, CommandExe
 
     private void openCaseRoll(Player p, Inventory inv) {
         UUID id = p.getUniqueId(); if (!opening.add(id)) { p.sendMessage("§eКейс уже открывается."); return; }
-        if (!hasDiamonds(p,1)) { opening.remove(id); p.sendMessage("§cДля открытия нужен 1 алмаз."); p.playSound(p.getLocation(),Sound.BLOCK_CHEST_LOCKED,0.7f,1f); return; }
-        takeDiamonds(p,1); p.sendMessage("§eКейс открывается...");
+        if (!takeKey(p)) {
+            opening.remove(id);
+            p.sendMessage("§cУ тебя нет ключа от кейса. Попроси администратора выдать его командой /key.");
+            p.playSound(p.getLocation(), Sound.BLOCK_CHEST_LOCKED, 0.7f, 1f);
+            return;
+        }
+        p.sendMessage("§eКейс открывается...");
         new BukkitRunnable() {
             int step;
             public void run() {
-                if (!p.isOnline()) { db.set(path(p)+".pending",db.getInt(path(p)+".pending",0)+1); saveDb(); opening.remove(id); cancel(); return; }
+                if (!p.isOnline()) {
+                    db.set(path(p) + ".pending_keys", db.getInt(path(p) + ".pending_keys", 0) + 1);
+                    saveDb();
+                    opening.remove(id);
+                    cancel();
+                    return;
+                }
                 boolean visible = p.getOpenInventory().getTopInventory() == inv;
                 if (step++ < 10) { if (visible) { Skin s=SKINS.get(ThreadLocalRandom.current().nextInt(SKINS.size())); inv.setItem(13,item(s.icon,"§e✦ " + s.name,"§7Определяем награду...")); p.playSound(p.getLocation(),Sound.UI_BUTTON_CLICK,0.5f,1.2f+step*0.04f); } return; }
                 Skin prize = roll(); List<String> unlocked = owned(p);
-                if (unlocked.contains(prize.id)) { giveDiamonds(p,2); if (visible) inv.setItem(13,item(Material.DIAMOND,"§bДубликат: " + prize.name,"§aВозвращено 2 алмаза")); p.sendMessage("§eДубликат " + prize.name + "§e — возвращено 2 алмаза."); }
+                if (unlocked.contains(prize.id)) {
+                    giveKeys(p, 1);
+                    if (visible) inv.setItem(13, item(Material.TRIPWIRE_HOOK, "§bДубликат: " + prize.name, "§aКлюч возвращён."));
+                    p.sendMessage("§eДубликат " + prize.name + "§e — ключ возвращён.");
+                }
                 else { unlocked.add(prize.id); db.set(path(p)+".owned",unlocked); saveDb(); if (visible) inv.setItem(13,item(prize.icon,prize.rarity+"§l"+prize.name,"§aНовый скин в коллекции!","§7Тип: " + (prize.threeD?"§b3D":"§a2D"),"","§eИспользуй /skin")); p.sendMessage("§aНовый скин: " + prize.rarity + prize.name + "§a. Используй /skin."); }
                 p.playSound(p.getLocation(),Sound.UI_TOAST_CHALLENGE_COMPLETE,0.9f,1f); opening.remove(id); cancel();
             }
@@ -222,23 +363,69 @@ public final class SkinPlugin extends JavaPlugin implements Listener, CommandExe
         if(m==Material.BOW)return "BOW";if(m==Material.CROSSBOW)return "CROSSBOW";if(m==Material.TRIDENT)return "TRIDENT";if(m==Material.MACE)return "MACE";if(m==Material.SHIELD)return "SHIELD";
         if(n.endsWith("_HELMET")||n.endsWith("_CHESTPLATE")||n.endsWith("_LEGGINGS")||n.endsWith("_BOOTS"))return "ARMOR";return null;
     }
-    private String path(Player p){return "players."+p.getUniqueId();}
-    private List<String> owned(Player p){return new ArrayList<>(db.getStringList(path(p)+".owned"));}
+    private String path(Player p){return path(p.getUniqueId());}
+    private String path(UUID id){return "players."+id;}
+    private List<String> owned(Player p){return owned(p.getUniqueId());}
+    private List<String> owned(UUID id){return new ArrayList<>(db.getStringList(path(id)+".owned"));}
     private String active(Player p,String cat){return db.getString(path(p)+".active."+cat);}
     private void setActive(Player p,String cat,String id){db.set(path(p)+".active."+cat,id);saveDb();}
     private void saveDb(){try{db.save(dbFile);}catch(IOException ex){getLogger().severe("Cannot save skins.yml: "+ex.getMessage());}}
     private Skin find(String id){for(Skin s:SKINS)if(s.id.equals(id))return s;return null;}
-    private boolean hasDiamonds(Player p,int amount){int n=0;for(ItemStack it:p.getInventory().getStorageContents())if(it!=null&&it.getType()==Material.DIAMOND)n+=it.getAmount();return n>=amount;}
-    private void takeDiamonds(Player p,int amount){int left=amount;for(int i=0;i<36&&left>0;i++){ItemStack it=p.getInventory().getItem(i);if(it==null||it.getType()!=Material.DIAMOND)continue;int take=Math.min(left,it.getAmount());it.setAmount(it.getAmount()-take);left-=take;if(it.getAmount()==0)p.getInventory().setItem(i,null);}}
-    private void giveDiamonds(Player p,int amount){Map<Integer,ItemStack> rest=p.getInventory().addItem(new ItemStack(Material.DIAMOND,amount));for(ItemStack it:rest.values())p.getWorld().dropItemNaturally(p.getLocation(),it);}
+    private int countKeys(Player p) {
+        int count = 0;
+        for (ItemStack stack : p.getInventory().getStorageContents()) {
+            if (isCaseKey(stack)) count += stack.getAmount();
+        }
+        return count;
+    }
+    private boolean takeKey(Player p) {
+        for (int slot = 0; slot < 36; slot++) {
+            ItemStack stack = p.getInventory().getItem(slot);
+            if (!isCaseKey(stack)) continue;
+            if (stack.getAmount() <= 1) p.getInventory().setItem(slot, null);
+            else stack.setAmount(stack.getAmount() - 1);
+            return true;
+        }
+        return false;
+    }
+    private boolean isCaseKey(ItemStack stack) {
+        return stack != null && stack.hasItemMeta()
+                && "case_key".equals(stack.getItemMeta().getPersistentDataContainer().get(keyTag, PersistentDataType.STRING));
+    }
+    private ItemStack createKey(int amount) {
+        ItemStack key = new ItemStack(Material.TRIPWIRE_HOOK, amount);
+        ItemMeta meta = key.getItemMeta();
+        meta.setDisplayName("§6§lКлюч от кейса");
+        meta.setLore(List.of("§7Открывает кейс со скинами", "§eПКМ не требуется — используй /case"));
+        meta.getPersistentDataContainer().set(keyTag, PersistentDataType.STRING, "case_key");
+        key.setItemMeta(meta);
+        return key;
+    }
+    private void giveKeys(Player p, int amount) {
+        Map<Integer, ItemStack> rest = p.getInventory().addItem(createKey(amount));
+        for (ItemStack stack : rest.values()) p.getWorld().dropItemNaturally(p.getLocation(), stack);
+    }
     private ItemStack item(Material type,String name,String... lore){ItemStack it=new ItemStack(type);ItemMeta meta=it.getItemMeta();meta.setDisplayName(name);meta.setLore(Arrays.asList(lore));it.setItemMeta(meta);return it;}
     private void category(Inventory inv,int slot,Material icon,String cat,String title,Player p){long count=SKINS.stream().filter(s->s.category.equals(cat)&&owned(p).contains(s.id)).count();inv.setItem(slot,item(icon,title,"§7Открыто: §f"+count,"","§eНажми, чтобы открыть"));}
     private void frame(Inventory inv){ItemStack pane=item(Material.BLACK_STAINED_GLASS_PANE,"§0 ");for(int i=0;i<inv.getSize();i++){int row=i/9,col=i%9;if(row==0||row==inv.getSize()/9-1||col==0||col==8)inv.setItem(i,pane);}}
     private String categoryName(String c){return switch(c){case "SWORD"->"мечи";case "AXE"->"топоры";case "PICKAXE"->"кирки";case "SHOVEL"->"лопаты";case "HOE"->"мотыги";case "BOW"->"луки";case "CROSSBOW"->"арбалеты";case "TRIDENT"->"трезубцы";case "MACE"->"булавы";case "SHIELD"->"щиты";case "ARMOR"->"броня";default->c.toLowerCase(Locale.ROOT);};}
 
     private static final class Menu implements InventoryHolder {
-        private final UUID owner; private final String type,category; private Inventory inv;
-        private Menu(UUID owner,String type,String category){this.owner=owner;this.type=type;this.category=category;}
+        private final UUID owner;
+        private final String type, category;
+        private final UUID target;
+        private final String targetName;
+        private Inventory inv;
+        private Menu(UUID owner, String type, String category) {
+            this(owner, type, category, null, null);
+        }
+        private Menu(UUID owner, String type, String category, UUID target, String targetName) {
+            this.owner = owner;
+            this.type = type;
+            this.category = category;
+            this.target = target;
+            this.targetName = targetName;
+        }
         @Override public Inventory getInventory(){return inv;}
     }
 }

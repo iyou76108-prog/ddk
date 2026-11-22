@@ -1,9 +1,9 @@
 name: SMPClassSkins
-version: 1.0.0
+version: 1.1.0
 main: ru.ddk.skins.SkinPlugin
 api-version: '1.21.11'
 author: ddk
-description: 2D and 3D cosmetic skins, cases and collections for SMPClasses
+description: 2D and 3D cosmetic skins, key cases and admin skin tools
 commands:
   case:
     description: Открыть кейс со скинами
@@ -11,3 +11,15 @@ commands:
   skin:
     description: Открыть коллекцию и надеть скины
     usage: /skin
+  skinadmin:
+    description: Админ-панель выдачи скинов
+    usage: /skinadmin [ник]
+    permission: smpclassskins.admin
+  key:
+    description: Выдать игроку ключ от кейса
+    usage: /key <ник> [количество]
+    permission: smpclassskins.admin
+permissions:
+  smpclassskins.admin:
+    description: Выдача ключей и скинов игрокам
+    default: op

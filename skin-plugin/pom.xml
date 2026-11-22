@@ -5,7 +5,7 @@
     <modelVersion>4.0.0</modelVersion>
     <groupId>ru.ddk</groupId>
     <artifactId>smp-class-skins</artifactId>
-    <version>1.0.0</version>
+    <version>1.1.0</version>
     <name>SMPClassSkins</name>
     <description>Cosmetic 2D and 3D skins for Paper/Purpur 1.21.11</description>
     <properties>
@@ -24,7 +24,7 @@
         </dependency>
     </dependencies>
     <build>
-        <finalName>SMPClassSkins-1.0.0</finalName>
+        <finalName>SMPClassSkins-1.1.0</finalName>
         <plugins>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>

@@ -37,8 +37,8 @@ jobs:
       - name: Upload SMPClassSkins JAR
         uses: actions/upload-artifact@v4
         with:
-          name: SMPClassSkins-1.0.0
-          path: skin-plugin/target/SMPClassSkins-1.0.0.jar
+          name: SMPClassSkins-1.1.0
+          path: skin-plugin/target/SMPClassSkins-1.1.0.jar
           if-no-files-found: error
       - name: Upload SMPClassSkins resource pack
         uses: actions/upload-artifact@v4
@@ -51,6 +51,6 @@ jobs:
         with:
           name: SMPClassSkins-Bundle-1.0.0
           path: |
-            skin-plugin/target/SMPClassSkins-1.0.0.jar
+            skin-plugin/target/SMPClassSkins-1.1.0.jar
             target/SMPClassSkins-ResourcePack-1.0.0.zip
           if-no-files-found: error
