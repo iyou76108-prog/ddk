@@ -11,7 +11,6 @@ import org.bukkit.inventory.*;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.util.Vector;
-import org.bukkit.Input;
 
 import java.util.*;
 import java.util.concurrent.ThreadLocalRandom;
@@ -33,7 +32,7 @@ public final class VillagerService {
     private final Map<UUID, Long> nextSearchAt = new HashMap<>();
     private final Map<UUID, Army> armies = new HashMap<>();
     private final Map<UUID, Long> armyAttackTimes = new HashMap<>();
-    private final Map<UUID, Villager> megaRides = new HashMap<>();
+    private final Map<UUID, Horse> horseRides = new HashMap<>();
 
     private record Army(List<Villager> members, Set<UUID> excludedPlayers) {
         Army withExcludedPlayer(UUID excluded) {
@@ -53,7 +52,7 @@ public final class VillagerService {
         plugin.getServer().getScheduler().runTaskTimer(plugin, this::runWorkers, 20L, 20L);
         plugin.getServer().getScheduler().runTaskTimer(plugin, this::updateGuards, 20L, 20L);
         plugin.getServer().getScheduler().runTaskTimer(plugin, this::updateArmies, 5L, 5L);
-        plugin.getServer().getScheduler().runTaskTimer(plugin, this::updateMegaRides, 1L, 1L);
+        plugin.getServer().getScheduler().runTaskTimer(plugin, this::updateHorseRides, 1L, 1L);
         plugin.getServer().getScheduler().runTaskTimer(plugin, this::updatePassiveBonuses, 40L, 40L);
         plugin.getServer().getScheduler().runTaskLater(plugin, this::cleanupTransientEntities, 20L);
     }
@@ -454,8 +453,8 @@ public final class VillagerService {
 
     public void disbandAll() {
         // Армия намеренно переживает reload: она состоит из постоянных помеченных жителей.
-        for (Villager mount : new ArrayList<>(megaRides.values())) mount.remove();
-        megaRides.clear();
+        for (Horse horse : new ArrayList<>(horseRides.values())) horse.remove();
+        horseRides.clear();
         cleanupTransientEntities();
     }
 
@@ -524,86 +523,75 @@ public final class VillagerService {
         }
     }
 
-    public boolean startMegaRide(Player player) {
-        finishMegaRide(player.getUniqueId());
-        Villager mount = spawnVillager(player, player.getLocation().clone().add(0, 0.3, 0), "mega");
-        mount.setAI(false);
-        mount.setAware(false);
-        mount.setSilent(true);
-        mount.setInvulnerable(false);
-        mount.setGravity(true);
-        mount.addPotionEffect(new org.bukkit.potion.PotionEffect(
-                org.bukkit.potion.PotionEffectType.SPEED, 20 * 16, 3, false, false));
-        if (!mount.addPassenger(player)) {
-            mount.remove();
-            player.sendMessage("§cНе удалось сесть на Мега жителя.");
+    public boolean startHorseRide(Player player) {
+        finishHorseRide(player.getUniqueId());
+
+        Location spawn = player.getLocation().clone().add(0, 0.2, 0);
+        Horse horse = (Horse) spawn.getWorld().spawnEntity(spawn, EntityType.HORSE);
+        tag(horse, player, "horse_ride");
+        horse.setAdult();
+        horse.setTamed(true);
+        horse.setOwner(player);
+        horse.setColor(Horse.Color.CHESTNUT);
+        horse.setCustomName("§6Конь стремительного ветра");
+        horse.setCustomNameVisible(true);
+        horse.setSilent(false);
+        horse.setInvulnerable(false);
+        horse.setJumpStrength(0.95);
+        horse.getInventory().setSaddle(new ItemStack(Material.SADDLE));
+        horse.addPotionEffect(new org.bukkit.potion.PotionEffect(
+                org.bukkit.potion.PotionEffectType.SPEED, 20 * 20, 3, false, false));
+
+        if (!horse.addPassenger(player)) {
+            horse.remove();
+            player.sendMessage("§cНе удалось оседлать коня.");
             return false;
         }
-        megaRides.put(player.getUniqueId(), mount);
-        player.sendMessage("§aВы оседлали Мега жителя. WASD — ехать, пробел — прыгать. Действует 15 секунд.");
-        long duration = plugin.getConfig().getLong("durations.mega_villager", 15L);
+
+        horseRides.put(player.getUniqueId(), horse);
+        player.sendMessage("§a§lКонный прорыв! §fВы оседлали быстрого коня: Скорость IV на 20 секунд.");
+        long duration = Math.max(1L, plugin.getConfig().getLong("durations.horse_ride", 20L));
         plugin.getServer().getScheduler().runTaskLater(plugin,
-                () -> finishMegaRide(player.getUniqueId()), duration * 20L);
+                () -> finishHorseRide(player.getUniqueId()), duration * 20L);
         return true;
     }
 
-    private void updateMegaRides() {
+    private void updateHorseRides() {
         List<UUID> toFinish = new ArrayList<>();
-        for (Map.Entry<UUID, Villager> entry : new ArrayList<>(megaRides.entrySet())) {
+        for (Map.Entry<UUID, Horse> entry : new ArrayList<>(horseRides.entrySet())) {
             Player rider = Bukkit.getPlayer(entry.getKey());
-            Villager mount = entry.getValue();
-            if (rider == null || !rider.isOnline() || rider.isDead()
-                    || !mount.isValid() || rider.getVehicle() != mount) {
+            Horse horse = entry.getValue();
+            if (rider == null || !rider.isOnline() || !horse.isValid() || horse.isDead()) {
                 toFinish.add(entry.getKey());
-                continue;
             }
-
-            Input input = rider.getCurrentInput();
-            float yaw = rider.getLocation().getYaw();
-            Vector forward = new Vector(-Math.sin(Math.toRadians(yaw)), 0, Math.cos(Math.toRadians(yaw)));
-            Vector right = new Vector(forward.getZ(), 0, -forward.getX());
-            Vector move = new Vector();
-            if (input.isForward()) move.add(forward);
-            if (input.isBackward()) move.subtract(forward);
-            if (input.isRight()) move.add(right);
-            if (input.isLeft()) move.subtract(right);
-            if (move.lengthSquared() > 0) move.normalize().multiply(input.isSprint() ? 0.75 : 0.58);
-
-            double y = mount.getVelocity().getY();
-            if (input.isJump() && mount.isOnGround()) y = 0.42;
-            mount.setVelocity(new Vector(move.getX(), y, move.getZ()));
-            mount.setRotation(yaw, 0);
-            rider.setFallDistance(0);
         }
-        for (UUID owner : toFinish) finishMegaRide(owner);
+        for (UUID owner : toFinish) finishHorseRide(owner);
     }
 
     public void finishRidesForQuit(UUID owner) {
-        finishMegaRide(owner);
+        finishHorseRide(owner);
     }
 
-    private void finishMegaRide(UUID owner) {
-        Villager mount = megaRides.remove(owner);
-        if (mount == null) return;
+    private void finishHorseRide(UUID owner) {
+        Horse horse = horseRides.remove(owner);
+        if (horse == null) return;
+
         Player rider = Bukkit.getPlayer(owner);
-        if (rider != null && rider.isInsideVehicle()) {
+        Location end = horse.getLocation().clone();
+        if (rider != null && rider.isOnline() && rider.getVehicle() == horse) {
             rider.leaveVehicle();
-            Location safe = mount.getLocation().clone().add(0, 1, 0);
-            rider.teleport(safe);
+            rider.teleport(end.add(0, 1, 0));
         }
-        mount.remove();
-        if (rider != null && rider.isOnline()) rider.sendMessage("§eПоездка на Мега жителе закончена.");
-    }
 
-    public void cleanupTransientEntities() {
-        for (World world : Bukkit.getWorlds()) {
-            for (Entity entity : new ArrayList<>(world.getEntities())) {
-                String kind = kindOf(entity);
-                if ("mega".equals(kind) || "minion".equals(kind)) entity.remove();
-            }
+        if (horse.isValid()) {
+            horse.getWorld().spawnParticle(Particle.CLOUD, horse.getLocation().add(0, 1, 0),
+                    18, 0.45, 0.45, 0.45, 0.03);
+            horse.getWorld().playSound(horse.getLocation(), Sound.ENTITY_HORSE_DEATH, 0.8f, 0.8f);
+            horse.remove();
         }
-        armies.clear();
-        megaRides.clear();
+        if (rider != null && rider.isOnline()) {
+            rider.sendMessage("§eКонь стремительного ветра истощился и исчез.");
+        }
     }
 
     private void updatePassiveBonuses() {
