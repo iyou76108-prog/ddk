@@ -255,16 +255,26 @@ public final class VillagerService {
         String role = roleForTool(held.getType());
         if (role == null) return;
 
+        Material givenMaterial = held.getType();
+        ItemStack givenTool = held.clone();
+        givenTool.setAmount(1);
+
         ItemStack previous = villager.getEquipment().getItemInMainHand();
         if (previous != null && !previous.getType().isAir()) {
             HashMap<Integer, ItemStack> leftovers = player.getInventory().addItem(previous.clone());
             leftovers.values().forEach(item -> player.getWorld().dropItemNaturally(player.getLocation(), item));
         }
-        villager.getEquipment().setItemInMainHand(held.clone());
+        villager.getEquipment().setItemInMainHand(givenTool);
         villager.getEquipment().setItemInMainHandDropChance(0.0f);
-        held.setAmount(held.getAmount() - 1);
+        if (held.getAmount() <= 1) {
+            player.getInventory().setItemInMainHand(null);
+        } else {
+            ItemStack remainder = held.clone();
+            remainder.setAmount(held.getAmount() - 1);
+            player.getInventory().setItemInMainHand(remainder);
+        }
         setRole(villager, role);
-        player.sendMessage("§aВыдали жителю предмет: §f" + held.getType().name() + "§a. Профессия: §f" + roleName(role) + "§a.");
+        player.sendMessage("§aВыдали жителю предмет: §f" + givenMaterial.name() + "§a. Профессия: §f" + roleName(role) + "§a.");
         player.sendMessage("§7Он начнёт работать в пределах 180 блоков от флага. Результаты забирайте ПКМ пустой рукой.");
     }
 
