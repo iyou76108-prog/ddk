@@ -18,7 +18,7 @@ cooldowns:
     legion: 120
   slave_owner:
     place: 90
-    work_order: 10
+    buyout: 90
     army: 120
     horse_ride: 75
   chameleon:
@@ -33,7 +33,7 @@ cooldowns:
     golem: 90
 
 durations:
-  army: 0 # 0 = бессрочно, пока стражники не погибнут
+  army: 45 # стражники исчезают через 45 секунд
   horse_ride: 20
   camouflage: 4
   copied_skill: 80
