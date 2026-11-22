@@ -1,0 +1,13 @@
+name: SMPClassSkins
+version: 1.0.0
+main: ru.ddk.skins.SkinPlugin
+api-version: '1.21.11'
+author: ddk
+description: 2D and 3D cosmetic skins, cases and collections for SMPClasses
+commands:
+  case:
+    description: Открыть кейс со скинами
+    usage: /case
+  skin:
+    description: Открыть коллекцию и надеть скины
+    usage: /skin

@@ -1,0 +1,54 @@
+# Все значения времени указаны в секундах.
+cooldowns:
+  druid:
+    rootstorm: 26
+    wildcharge: 18
+    sporeburst: 30
+    avatar: 75
+  duelist:
+    parry: 18
+    lunge: 16
+    challenge: 32
+    whirlwind: 25
+    last_round: 70
+  summoner:
+    hound: 35
+    archers: 45
+    knight: 55
+    legion: 120
+  slave_owner:
+    place: 90
+    buyout: 90
+    army: 120
+    horse_ride: 75
+  chameleon:
+    camouflage: 22
+    tongue: 28
+    copy: 120
+  archmage:
+    firebolt: 8
+    blink: 18
+    meteor: 150
+    lava: 65
+    golem: 90
+
+durations:
+  army: 45 # стражники исчезают через 45 секунд
+  horse_ride: 20
+  camouflage: 4
+  copied_skill: 80
+  archmage_lava: 10
+  archmage_golem: 25
+
+production:
+  interval_seconds: 7 # шахтёр, дровосек и фермер создают новую партию каждые 7 секунд
+
+limits:
+  village_villagers: 8
+  summoner_minions: 8
+  tongue_range: 33
+  tongue_speed_blocks_per_second: 2
+  work_radius: 180
+
+messages:
+  prefix: "§8[§aКлассы§8] §r"
