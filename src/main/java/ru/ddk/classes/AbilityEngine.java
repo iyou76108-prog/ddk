@@ -288,7 +288,11 @@ public final class AbilityEngine {
             }
         }
         for (Player captive : Bukkit.getOnlinePlayers()) {
-            if (readUuid(captive, captiveByKey) != null) activeCaptor(captive);
+            if (readUuid(captive, captiveByKey) == null) continue;
+            UUID ownerId = activeCaptor(captive);
+            if (ownerId != null && !captive.isDead()) {
+                captive.addPotionEffect(new PotionEffect(PotionEffectType.WEAKNESS, 45, 2, true, true));
+            }
         }
     }
 
