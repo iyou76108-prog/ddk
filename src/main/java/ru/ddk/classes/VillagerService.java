@@ -571,7 +571,7 @@ public final class VillagerService {
         }
     }
 
-    public boolean startHorseRide(Player player) {    public boolean startHorseRide(Player player) {
+    public boolean startHorseRide(Player player) {
         finishHorseRide(player.getUniqueId());
 
         Location spawn = player.getLocation().clone().add(0, 0.2, 0);
