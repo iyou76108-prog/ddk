@@ -932,7 +932,7 @@ public final class AbilityEngine {
             case DRUID -> List.of("druid_rootstorm", "druid_wildcharge", "druid_sporeburst", "druid_avatar");
             case DUELIST -> List.of("duelist_parry", "duelist_lunge", "duelist_challenge", "duelist_whirlwind", "duelist_last");
             case SUMMONER -> List.of("summoner_hound", "summoner_archers", "summoner_knight", "summoner_legion");
-            case SLAVE_OWNER -> List.of("owner_work", "owner_army", "owner_mega");
+            case SLAVE_OWNER -> List.of("owner_buyout", "owner_army", "owner_mega");
             case CHAMELEON -> List.of("chameleon_camouflage", "chameleon_tongue");
             case ARCHMAGE -> List.of("archmage_firebolt", "archmage_blink", "archmage_meteor",
                     "archmage_lava", "archmage_golem");
