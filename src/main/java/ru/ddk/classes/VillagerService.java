@@ -716,7 +716,7 @@ public final class VillagerService {
         }
     }
 
-    // Professions generate goods passively    // Professions generate goods passively in the villager's own stored inventory.
+    // Professions generate goods passively in the villager's own stored inventory.
     private void runWorkers() {
         long now = System.currentTimeMillis();
         for (World world : Bukkit.getWorlds()) {
