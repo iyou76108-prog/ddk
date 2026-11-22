@@ -272,7 +272,12 @@ public final class SkinPlugin extends JavaPlugin implements Listener, CommandExe
             if (target != null) target.sendMessage("§aАдминистратор выдал тебе скин: " + selected.rarity + selected.name);
             p.sendMessage("§aВыдан скин §f" + selected.name + " §aигроку §f" + m.targetName + "§a.");
             p.playSound(p.getLocation(), Sound.ENTITY_EXPERIENCE_ORB_PICKUP, 0.8f, 1.4f);
-            openAdminSkins(p, target != null ? target : p);
+            if (target != null) {
+                openAdminSkins(p, target);
+            } else {
+                p.sendMessage("§aСкин выдан. Игрок сейчас не в сети; он увидит его при следующем входе.");
+                p.closeInventory();
+            }
             return;
         }
         if (m.type.equals("case")) {
