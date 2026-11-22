@@ -5,7 +5,7 @@
     <modelVersion>4.0.0</modelVersion>
     <groupId>ru.ddk</groupId>
     <artifactId>smp-classes</artifactId>
-    <version>1.3.0</version>
+    <version>1.3.1</version>
     <name>SMP Classes</name>
     <description>Six RPG classes for Purpur 1.21.11</description>
     <properties>
@@ -27,7 +27,7 @@
         </dependency>
     </dependencies>
     <build>
-        <finalName>SMPClasses-1.3.0</finalName>
+        <finalName>SMPClasses-1.3.1</finalName>
         <plugins>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
