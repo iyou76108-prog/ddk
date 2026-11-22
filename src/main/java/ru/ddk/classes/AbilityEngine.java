@@ -47,7 +47,7 @@ public final class AbilityEngine {
             Map.entry("owner_place", "cooldowns.slave_owner.place"),
             Map.entry("owner_work", "cooldowns.slave_owner.work_order"),
             Map.entry("owner_army", "cooldowns.slave_owner.army"),
-            Map.entry("owner_mega", "cooldowns.slave_owner.mega_villager"),
+            Map.entry("owner_mega", "cooldowns.slave_owner.horse_ride"),
             Map.entry("chameleon_camouflage", "cooldowns.chameleon.camouflage"),
             Map.entry("chameleon_tongue", "cooldowns.chameleon.tongue"),
             Map.entry("chameleon_copy", "cooldowns.chameleon.copy"),
@@ -109,7 +109,7 @@ public final class AbilityEngine {
             case "owner_place" -> villagers.toggleFlag(player);
             case "owner_work" -> { villagers.openWorkMenu(player); yield true; }
             case "owner_army" -> { villagers.startArmy(player); yield true; }
-            case "owner_mega" -> villagers.startMegaRide(player);
+            case "owner_mega" -> villagers.startHorseRide(player);
             case "chameleon_camouflage" -> chameleonCamouflage(player);
             case "chameleon_tongue" -> chameleonTongue(player);
             case "archmage_firebolt" -> archmageFirebolt(player);
