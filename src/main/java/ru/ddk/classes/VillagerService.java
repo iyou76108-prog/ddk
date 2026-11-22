@@ -24,6 +24,12 @@ public final class VillagerService {
     private final NamespacedKey ownerKey;
     private final NamespacedKey kindKey;
     private final NamespacedKey roleKey;
+    private final NamespacedKey armyExpiresKey;
+    private final NamespacedKey captiveByKey;
+    private final NamespacedKey captiveUntilKey;
+    private final NamespacedKey stolenHealthKey;
+    private final NamespacedKey stolenArmorKey;
+    private final NamespacedKey armorPenaltyKey;
 
     private final Map<UUID, UUID> openedInventories = new HashMap<>();
     private final Map<UUID, String> pendingRoles = new HashMap<>();
@@ -34,11 +40,11 @@ public final class VillagerService {
     private final Map<UUID, Long> armyAttackTimes = new HashMap<>();
     private final Map<UUID, Horse> horseRides = new HashMap<>();
 
-    private record Army(List<Villager> members, Set<UUID> excludedPlayers) {
+    private record Army(List<Villager> members, Set<UUID> excludedPlayers, long expiresAt) {
         Army withExcludedPlayer(UUID excluded) {
             Set<UUID> updated = new HashSet<>(excludedPlayers);
             updated.add(excluded);
-            return new Army(members, Set.copyOf(updated));
+            return new Army(members, Set.copyOf(updated), expiresAt);
         }
     }
 
@@ -48,6 +54,12 @@ public final class VillagerService {
         this.ownerKey = new NamespacedKey(plugin, "owner_uuid");
         this.kindKey = new NamespacedKey(plugin, "owned_kind");
         this.roleKey = new NamespacedKey(plugin, "villager_role");
+        this.armyExpiresKey = new NamespacedKey(plugin, "army_expires_at");
+        this.captiveByKey = new NamespacedKey(plugin, "slave_captor");
+        this.captiveUntilKey = new NamespacedKey(plugin, "slave_capture_until");
+        this.stolenHealthKey = new NamespacedKey(plugin, "slave_stolen_health");
+        this.stolenArmorKey = new NamespacedKey(plugin, "slave_stolen_armor");
+        this.armorPenaltyKey = new NamespacedKey(plugin, "slave_armor_penalty");
 
         plugin.getServer().getScheduler().runTaskTimer(plugin, this::runWorkers, 20L, 20L);
         plugin.getServer().getScheduler().runTaskTimer(plugin, this::updateGuards, 20L, 20L);
@@ -389,9 +401,11 @@ public final class VillagerService {
         disbandArmy(player.getUniqueId());
         data.clearArmyExcludedPlayers(player.getUniqueId());
         List<Villager> members = new ArrayList<>();
+        long expiresAt = System.currentTimeMillis() + plugin.getConfig().getLong("durations.army", 45L) * 1000L;
         for (int i = 0; i < 15; i++) {
             Location spawn = player.getLocation().clone().add((i % 5) - 2, 0, 2 + (i / 5));
             Villager soldier = spawnVillager(player, spawn, "army");
+            soldier.getPersistentDataContainer().set(armyExpiresKey, PersistentDataType.LONG, expiresAt);
             soldier.setAI(true);
             soldier.setAware(true);
             soldier.setProfession(Villager.Profession.WEAPONSMITH);
@@ -412,8 +426,8 @@ public final class VillagerService {
             gear.setItemInMainHandDropChance(1.0f);
             members.add(soldier);
         }
-        armies.put(player.getUniqueId(), new Army(members, data.getArmyExcludedPlayers(player.getUniqueId())));
-        player.sendMessage("§c15 стражников призваны. Они не исчезают по таймеру и охраняют вас, пока их не убьют.");
+        armies.put(player.getUniqueId(), new Army(members, data.getArmyExcludedPlayers(player.getUniqueId()), expiresAt));
+        player.sendMessage("§c15 стражников призваны на 45 секунд. После этого вся армия исчезнет.");
         player.sendMessage("§7ПКМ по игроку — исключить его из целей всей армии. Все остальные игроки в радиусе 75 блоков атакуются.");
     }
 
@@ -424,8 +438,12 @@ public final class VillagerService {
     }
 
     public boolean isArmyActive(UUID ownerId) {
-        if (armies.containsKey(ownerId)) return true;
-        return !ownedEntities(ownerId, "army").isEmpty();
+        long now = System.currentTimeMillis();
+        Army army = armies.get(ownerId);
+        if (army != null) return army.expiresAt() > now;
+        return ownedEntities(ownerId, "army").stream()
+                .filter(Villager.class::isInstance).map(Villager.class::cast)
+                .anyMatch(soldier -> getOrSetArmyExpiry(soldier) > now);
     }
 
     public void setArmyTarget(Player owner, Entity clicked) {
@@ -433,8 +451,10 @@ public final class VillagerService {
         if (army == null) {
             List<Villager> existing = ownedEntities(owner.getUniqueId(), "army").stream()
                     .filter(Villager.class::isInstance).map(Villager.class::cast).toList();
+            existing = existing.stream().filter(soldier -> getOrSetArmyExpiry(soldier) > System.currentTimeMillis()).toList();
             if (existing.isEmpty()) return;
-            army = new Army(existing, data.getArmyExcludedPlayers(owner.getUniqueId()));
+            long expiry = existing.stream().mapToLong(this::getOrSetArmyExpiry).min().orElse(0L);
+            army = new Army(existing, data.getArmyExcludedPlayers(owner.getUniqueId()), expiry);
         }
         if (!(clicked instanceof Player excluded) || excluded.equals(owner)) return;
         data.addArmyExcludedPlayer(owner.getUniqueId(), excluded.getUniqueId());
@@ -458,28 +478,54 @@ public final class VillagerService {
         cleanupTransientEntities();
     }
 
+    private long getOrSetArmyExpiry(Villager soldier) {
+        long expiry = soldier.getPersistentDataContainer().getOrDefault(
+                armyExpiresKey, PersistentDataType.LONG, 0L);
+        if (expiry <= 0L) {
+            expiry = System.currentTimeMillis() + 45_000L;
+            soldier.getPersistentDataContainer().set(armyExpiresKey, PersistentDataType.LONG, expiry);
+        }
+        return expiry;
+    }
+
     private void updateArmies() {
-        // Восстанавливаем список стражников после перезагрузки плагина.
-        for (Player owner : Bukkit.getOnlinePlayers()) {
-            if (!armies.containsKey(owner.getUniqueId())) {
-                List<Villager> restored = ownedEntities(owner.getUniqueId(), "army").stream()
-                        .filter(Villager.class::isInstance).map(Villager.class::cast).toList();
-                if (!restored.isEmpty()) armies.put(owner.getUniqueId(),
-                        new Army(restored, data.getArmyExcludedPlayers(owner.getUniqueId())));
+        long now = System.currentTimeMillis();
+        // Удаляем истёкшие отряды независимо от того, находится ли владелец онлайн.
+        for (World world : Bukkit.getWorlds()) {
+            for (Entity entity : new ArrayList<>(world.getEntities())) {
+                if (!(entity instanceof Villager soldier) || !"army".equals(kindOf(soldier))) continue;
+                if (getOrSetArmyExpiry(soldier) <= now) soldier.remove();
             }
         }
 
-        long now = System.currentTimeMillis();
+        for (Player owner : Bukkit.getOnlinePlayers()) {
+            if (!armies.containsKey(owner.getUniqueId())) {
+                List<Villager> restored = ownedEntities(owner.getUniqueId(), "army").stream()
+                        .filter(Villager.class::isInstance).map(Villager.class::cast)
+                        .filter(soldier -> getOrSetArmyExpiry(soldier) > now).toList();
+                if (!restored.isEmpty()) {
+                    long expiry = restored.stream().mapToLong(this::getOrSetArmyExpiry).min().orElse(now);
+                    armies.put(owner.getUniqueId(),
+                            new Army(restored, data.getArmyExcludedPlayers(owner.getUniqueId()), expiry));
+                }
+            }
+        }
+
         Iterator<Map.Entry<UUID, Army>> iterator = armies.entrySet().iterator();
         while (iterator.hasNext()) {
             Map.Entry<UUID, Army> entry = iterator.next();
             UUID ownerId = entry.getKey();
             Army army = entry.getValue();
+            if (army.expiresAt() <= now) {
+                disbandArmy(ownerId);
+                continue;
+            }
             Player owner = Bukkit.getPlayer(ownerId);
             if (owner == null || !owner.isOnline()) continue;
 
             List<Villager> alive = army.members().stream()
-                    .filter(Entity::isValid).filter(v -> !v.isDead()).toList();
+                    .filter(Entity::isValid).filter(v -> !v.isDead())
+                    .filter(v -> getOrSetArmyExpiry(v) > now).toList();
             if (alive.isEmpty()) {
                 iterator.remove();
                 continue;
@@ -523,7 +569,7 @@ public final class VillagerService {
         }
     }
 
-    public boolean startHorseRide(Player player) {
+    public boolean startHorseRide(Player player) {    public boolean startHorseRide(Player player) {
         finishHorseRide(player.getUniqueId());
 
         Location spawn = player.getLocation().clone().add(0, 0.2, 0);
@@ -607,7 +653,12 @@ public final class VillagerService {
         horseRides.clear();
     }
 
+    public void refreshPassiveBonuses() {
+        updatePassiveBonuses();
+    }
+
     private void updatePassiveBonuses() {
+        long now = System.currentTimeMillis();
         for (Player player : Bukkit.getOnlinePlayers()) {
             ClassType type = data.getClass(player.getUniqueId());
             var maxHealth = player.getAttribute(Attribute.MAX_HEALTH);
@@ -623,7 +674,7 @@ public final class VillagerService {
             }
             if (type == ClassType.SUMMONER) {
                 int milestones = data.getSummonerKills(player.getUniqueId()) / 50;
-                healthBonus += milestones * 2.0; // +1 сердце за каждые 50 убийств
+                healthBonus += milestones * 2.0;
                 armorBonus += milestones * 1.0;
             }
             if (type == ClassType.CHAMELEON) {
@@ -635,7 +686,23 @@ public final class VillagerService {
                 healthBonus += leaves * 0.5;
             }
 
-            double targetHealth = Math.min(2048.0, 20.0 + healthBonus);
+            long captureUntil = player.getPersistentDataContainer().getOrDefault(
+                    captiveUntilKey, PersistentDataType.LONG, 0L);
+            boolean isCaptive = player.getPersistentDataContainer().has(captiveByKey, PersistentDataType.STRING)
+                    && captureUntil > now;
+            if (isCaptive) {
+                healthBonus = -10.0;
+                double penalty = player.getPersistentDataContainer().getOrDefault(
+                        armorPenaltyKey, PersistentDataType.DOUBLE, 0.0);
+                armorBonus -= penalty;
+            } else {
+                healthBonus += player.getPersistentDataContainer().getOrDefault(
+                        stolenHealthKey, PersistentDataType.DOUBLE, 0.0);
+                armorBonus += player.getPersistentDataContainer().getOrDefault(
+                        stolenArmorKey, PersistentDataType.DOUBLE, 0.0);
+            }
+
+            double targetHealth = isCaptive ? 10.0 : Math.min(2048.0, 20.0 + healthBonus);
             double oldHealth = maxHealth.getBaseValue();
             maxHealth.setBaseValue(targetHealth);
             if (targetHealth > oldHealth) {
@@ -647,7 +714,7 @@ public final class VillagerService {
         }
     }
 
-    // Professions generate goods passively in the villager's own stored inventory.
+    // Professions generate goods passively    // Professions generate goods passively in the villager's own stored inventory.
     private void runWorkers() {
         long now = System.currentTimeMillis();
         for (World world : Bukkit.getWorlds()) {
