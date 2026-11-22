@@ -23,6 +23,14 @@ public final class AbilityEngine {
     private final NamespacedKey ownerKey;
     private final NamespacedKey kindKey;
     private final NamespacedKey projectileKey;
+    private final NamespacedKey captiveTargetKey;
+    private final NamespacedKey captiveByKey;
+    private final NamespacedKey captureUntilKey;
+    private final NamespacedKey whipUsedKey;
+    private final NamespacedKey stolenHealthKey;
+    private final NamespacedKey stolenArmorKey;
+    private final NamespacedKey armorPenaltyKey;
+    private final Map<UUID, Long> whipCooldowns = new HashMap<>();
     private final Map<UUID, Long> parryUntil = new HashMap<>();
     private final Map<UUID, UUID> challengedTargets = new HashMap<>();
     private final Map<UUID, Long> challengeUntil = new HashMap<>();
@@ -45,7 +53,7 @@ public final class AbilityEngine {
             Map.entry("summoner_knight", "cooldowns.summoner.knight"),
             Map.entry("summoner_legion", "cooldowns.summoner.legion"),
             Map.entry("owner_place", "cooldowns.slave_owner.place"),
-            Map.entry("owner_work", "cooldowns.slave_owner.work_order"),
+            Map.entry("owner_buyout", "cooldowns.slave_owner.buyout"),
             Map.entry("owner_army", "cooldowns.slave_owner.army"),
             Map.entry("owner_mega", "cooldowns.slave_owner.horse_ride"),
             Map.entry("chameleon_camouflage", "cooldowns.chameleon.camouflage"),
@@ -65,7 +73,15 @@ public final class AbilityEngine {
         this.ownerKey = villagers.ownerKey();
         this.kindKey = villagers.kindKey();
         this.projectileKey = new NamespacedKey(plugin, "projectile_ability");
+        this.captiveTargetKey = new NamespacedKey(plugin, "slave_captive_target");
+        this.captiveByKey = new NamespacedKey(plugin, "slave_captor");
+        this.captureUntilKey = new NamespacedKey(plugin, "slave_capture_until");
+        this.whipUsedKey = new NamespacedKey(plugin, "slave_whip_used");
+        this.stolenHealthKey = new NamespacedKey(plugin, "slave_stolen_health");
+        this.stolenArmorKey = new NamespacedKey(plugin, "slave_stolen_armor");
+        this.armorPenaltyKey = new NamespacedKey(plugin, "slave_armor_penalty");
         plugin.getServer().getScheduler().runTaskTimer(plugin, this::updateClassPassives, 20L, 20L);
+        plugin.getServer().getScheduler().runTaskTimer(plugin, this::updateSlaveCaptures, 20L, 20L);
         plugin.getServer().getScheduler().runTaskTimer(plugin, this::updateMinionAI, 10L, 10L);
     }
 
@@ -107,7 +123,8 @@ public final class AbilityEngine {
             case "summoner_knight" -> summonKnight(player);
             case "summoner_legion" -> summonLegion(player);
             case "owner_place" -> villagers.toggleFlag(player);
-            case "owner_work" -> { villagers.openWorkMenu(player); yield true; }
+            case "owner_buyout" -> buyoutPlayer(player);
+            case "owner_whip" -> { player.sendMessage("§eПлётка работает при ударе по выкупленному игроку."); yield false; }
             case "owner_army" -> { villagers.startArmy(player); yield true; }
             case "owner_mega" -> villagers.startHorseRide(player);
             case "chameleon_camouflage" -> chameleonCamouflage(player);
@@ -139,6 +156,11 @@ public final class AbilityEngine {
                 "chameleon_passive", "chameleon_life").contains(id);
     }
 
+    public String getOwnerSlotAbilityId(UUID playerId) {
+        Player owner = Bukkit.getPlayer(playerId);
+        return owner != null && activeCaptiveTarget(owner) != null ? "owner_whip" : "owner_buyout";
+    }
+
     public String getCopiedSkillId(UUID playerId) {
         CopiedSkill skill = copies.get(playerId);
         if (skill == null) return null;
@@ -147,6 +169,178 @@ public final class AbilityEngine {
             return null;
         }
         return skill.abilityId();
+    }
+
+    private boolean buyoutPlayer(Player owner) {
+        if (activeCaptiveTarget(owner) != null) {
+            owner.sendMessage("§cУ вас уже есть выкупленный игрок. Дождитесь окончания 30 секунд.");
+            return false;
+        }
+        LivingEntity selected = target(owner, 24.0);
+        if (!(selected instanceof Player captive) || captive.getGameMode() == GameMode.SPECTATOR) {
+            owner.sendMessage("§cНаведитесь на игрока в радиусе 24 блоков.");
+            return false;
+        }
+        if (captive.getPersistentDataContainer().has(captiveByKey, PersistentDataType.STRING)
+                && captive.getPersistentDataContainer().getOrDefault(captureUntilKey, PersistentDataType.LONG, 0L)
+                > System.currentTimeMillis()) {
+            owner.sendMessage("§cЭтот игрок уже выкуплен другим Рабовладельцем.");
+            return false;
+        }
+
+        long expiresAt = System.currentTimeMillis() + 30_000L;
+        owner.getPersistentDataContainer().set(captiveTargetKey, PersistentDataType.STRING,
+                captive.getUniqueId().toString());
+        owner.getPersistentDataContainer().set(captureUntilKey, PersistentDataType.LONG, expiresAt);
+        owner.getPersistentDataContainer().remove(stolenHealthKey);
+        owner.getPersistentDataContainer().remove(stolenArmorKey);
+        captive.getPersistentDataContainer().set(captiveByKey, PersistentDataType.STRING,
+                owner.getUniqueId().toString());
+        captive.getPersistentDataContainer().set(captureUntilKey, PersistentDataType.LONG, expiresAt);
+        captive.getPersistentDataContainer().remove(whipUsedKey);
+        captive.getPersistentDataContainer().remove(armorPenaltyKey);
+
+        villagers.refreshPassiveBonuses();
+        if (!captive.isDead()) captive.setHealth(10.0);
+        captive.addPotionEffect(new PotionEffect(PotionEffectType.WEAKNESS, 45, 2, true, true));
+        captive.sendMessage("§c§lВАС ВЫКУПИЛИ! §f30 секунд у вас максимум 5 сердец и Слабость III. Вы не можете наносить урон своему Рабовладельцу.");
+        owner.sendMessage("§aВы выкупили игрока §f" + captive.getName()
+                + "§a на 30 секунд. Теперь слот 2 — Плётка.");
+        owner.getWorld().playSound(owner.getLocation(), Sound.ENTITY_VILLAGER_YES, 1.0f, 0.7f);
+        owner.getWorld().spawnParticle(Particle.HAPPY_VILLAGER, captive.getLocation().add(0, 1, 0),
+                35, 0.6, 0.8, 0.6, 0.05);
+        return true;
+    }
+
+    private UUID readUuid(Player player, NamespacedKey key) {
+        String raw = player.getPersistentDataContainer().get(key, PersistentDataType.STRING);
+        if (raw == null) return null;
+        try { return UUID.fromString(raw); } catch (IllegalArgumentException ignored) { return null; }
+    }
+
+    private UUID activeCaptiveTarget(Player owner) {
+        UUID captiveId = readUuid(owner, captiveTargetKey);
+        if (captiveId == null) return null;
+        long expiresAt = owner.getPersistentDataContainer().getOrDefault(
+                captureUntilKey, PersistentDataType.LONG, 0L);
+        if (expiresAt <= System.currentTimeMillis()) {
+            endBuyout(owner);
+            return null;
+        }
+        Player captive = Bukkit.getPlayer(captiveId);
+        if (captive != null && captive.isDead()) {
+            endBuyout(owner);
+            return null;
+        }
+        return captiveId;
+    }
+
+    private UUID activeCaptor(Player captive) {
+        UUID ownerId = readUuid(captive, captiveByKey);
+        if (ownerId == null) return null;
+        long expiresAt = captive.getPersistentDataContainer().getOrDefault(
+                captureUntilKey, PersistentDataType.LONG, 0L);
+        if (expiresAt <= System.currentTimeMillis()) {
+            Player owner = Bukkit.getPlayer(ownerId);
+            if (owner != null && captive.getUniqueId().equals(readUuid(owner, captiveTargetKey))) {
+                endBuyout(owner);
+            } else {
+                clearCaptive(captive);
+            }
+            return null;
+        }
+        return ownerId;
+    }
+
+    private void clearCaptive(Player captive) {
+        captive.getPersistentDataContainer().remove(captiveByKey);
+        captive.getPersistentDataContainer().remove(captureUntilKey);
+        captive.getPersistentDataContainer().remove(whipUsedKey);
+        captive.getPersistentDataContainer().remove(armorPenaltyKey);
+        captive.removePotionEffect(PotionEffectType.WEAKNESS);
+    }
+
+    private void endBuyout(Player owner) {
+        UUID captiveId = readUuid(owner, captiveTargetKey);
+        owner.getPersistentDataContainer().remove(captiveTargetKey);
+        owner.getPersistentDataContainer().remove(captureUntilKey);
+        owner.getPersistentDataContainer().remove(stolenHealthKey);
+        owner.getPersistentDataContainer().remove(stolenArmorKey);
+        if (captiveId != null) {
+            Player captive = Bukkit.getPlayer(captiveId);
+            if (captive != null && owner.getUniqueId().toString().equals(
+                    captive.getPersistentDataContainer().get(captiveByKey, PersistentDataType.STRING))) {
+                clearCaptive(captive);
+            }
+        }
+        villagers.refreshPassiveBonuses();
+        owner.sendMessage("§eВыкуп закончился. Игрок снова свободен, временные бонусы сняты.");
+    }
+
+    private void updateSlaveCaptures() {
+        for (Player owner : Bukkit.getOnlinePlayers()) {
+            if (readUuid(owner, captiveTargetKey) == null) continue;
+            UUID captiveId = activeCaptiveTarget(owner);
+            if (captiveId == null) continue;
+            Player captive = Bukkit.getPlayer(captiveId);
+            if (captive != null && captive.isOnline() && !captive.isDead()) {
+                captive.addPotionEffect(new PotionEffect(PotionEffectType.WEAKNESS, 45, 2, true, true));
+            }
+        }
+        for (Player captive : Bukkit.getOnlinePlayers()) {
+            if (readUuid(captive, captiveByKey) != null) activeCaptor(captive);
+        }
+    }
+
+    public void handleSlaveOwnerCombat(EntityDamageByEntityEvent event, String heldAbilityId) {
+        Entity attackerEntity = event.getDamager();
+        if (attackerEntity instanceof Projectile projectile
+                && projectile.getShooter() instanceof Entity shooter) {
+            attackerEntity = shooter;
+        }
+        if (!(attackerEntity instanceof Player attacker)
+                || !(event.getEntity() instanceof Player victim)) return;
+
+        UUID captiveId = activeCaptiveTarget(attacker);
+        if (victim.getUniqueId().equals(captiveId)) {
+            event.setCancelled(true);
+            if (event.getDamager() == attacker && "owner_whip".equals(heldAbilityId)) {
+                applyWhip(attacker, victim);
+            }
+            return;
+        }
+
+        UUID ownerId = activeCaptor(attacker);
+        if (victim.getUniqueId().equals(ownerId)) event.setCancelled(true);
+    }
+
+    private void applyWhip(Player owner, Player captive) {
+        if (!captive.getUniqueId().equals(activeCaptiveTarget(owner))
+                || !owner.getUniqueId().equals(activeCaptor(captive))) return;
+        long now = System.currentTimeMillis();
+        if (now < whipCooldowns.getOrDefault(owner.getUniqueId(), 0L)) return;
+        whipCooldowns.put(owner.getUniqueId(), now + 900L);
+
+        byte used = captive.getPersistentDataContainer().getOrDefault(
+                whipUsedKey, PersistentDataType.BYTE, (byte) 0);
+        if (used != 0) {
+            owner.sendMessage("§eВы уже применили Плётку к этому игроку во время текущего выкупа.");
+            return;
+        }
+        captive.getPersistentDataContainer().set(whipUsedKey, PersistentDataType.BYTE, (byte) 1);
+
+        // Пять сердец остаются максимальным здоровьем; удар забирает два сердца текущего HP.
+        captive.setHealth(Math.max(1.0, captive.getHealth() - 4.0));
+        captive.getPersistentDataContainer().set(armorPenaltyKey, PersistentDataType.DOUBLE, 2.0);
+        owner.getPersistentDataContainer().set(stolenHealthKey, PersistentDataType.DOUBLE, 4.0);
+        owner.getPersistentDataContainer().set(stolenArmorKey, PersistentDataType.DOUBLE, 2.0);
+        villagers.refreshPassiveBonuses();
+
+        owner.getWorld().spawnParticle(Particle.SWEEP_ATTACK, captive.getLocation().add(0, 1, 0),
+                12, 0.4, 0.6, 0.4, 0.02);
+        owner.getWorld().playSound(captive.getLocation(), Sound.ENTITY_PLAYER_ATTACK_SWEEP, 1.0f, 0.8f);
+        owner.sendMessage("§6Плётка сработала! §fВы украли 2 сердца и 2 брони до конца выкупа.");
+        captive.sendMessage("§cПлётка отняла у вас 2 сердца и 2 брони. Рабовладелец получил их до конца выкупа.");
     }
 
     private void updateClassPassives() {
