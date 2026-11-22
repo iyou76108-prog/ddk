@@ -40,6 +40,9 @@ durations:
   archmage_lava: 10
   archmage_golem: 25
 
+production:
+  interval_seconds: 7 # шахтёр, дровосек и фермер создают новую партию каждые 7 секунд
+
 limits:
   village_villagers: 8
   summoner_minions: 8
