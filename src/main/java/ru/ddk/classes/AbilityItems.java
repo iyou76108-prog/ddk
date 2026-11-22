@@ -79,8 +79,8 @@ public final class AbilityItems {
             };
             case SLAVE_OWNER -> new ItemStack[] {
                     create("owner_place", Material.RED_BANNER, "Моё место", "Поставить или поднять флаг деревни"),
-                    create("owner_work", Material.WRITABLE_BOOK, "Работайте за меня", "Выбрать профессию для жителя"),
-                    create("owner_army", Material.IRON_SWORD, "Армия", "15 бойцов на 20 секунд; ПКМ по игроку исключает его из целей"),
+                    create("owner_buyout", Material.EMERALD, "Я тебя выкупил", "Выкупить игрока перед собой на 30 секунд: у него 5 сердец и Слабость III"),
+                    create("owner_army", Material.IRON_SWORD, "Армия", "15 бойцов на 45 секунд; ПКМ по игроку исключает его из целей"),
                     create("owner_mega", Material.SADDLE, "Конный прорыв", "Оседлать быстрого коня со Скоростью IV на 20 секунд"),
                     createPassive("owner_passive", Material.HEART_OF_THE_SEA, "Возьму взамен",
                             "+2 сердца и +0,5 брони за каждого принадлежащего жителя")
@@ -122,7 +122,8 @@ public final class AbilityItems {
             case "summoner_archers" -> create(id, Material.STRAY_SPAWN_EGG, "Морозный дозор", "Скопированная способность призывателя");
             case "summoner_knight" -> create(id, Material.NETHERITE_SWORD, "Рыцарь могилы", "Скопированная способность призывателя");
             case "summoner_legion" -> create(id, Material.RAVAGER_SPAWN_EGG, "Легион бездны", "Скопированная способность призывателя");
-            case "owner_work" -> create(id, Material.WRITABLE_BOOK, "Работайте за меня", "Скопированная способность помещика");
+            case "owner_buyout" -> create(id, Material.EMERALD, "Я тебя выкупил", "Скопированная способность помещика");
+            case "owner_whip" -> create(id, Material.LEAD, "Плётка", "Ударьте выкупленного игрока: отнимите у него здоровье и 2 брони, получив их себе до конца выкупа");
             case "owner_army" -> create(id, Material.IRON_SWORD, "Армия", "Скопированная способность помещика");
             case "owner_mega" -> create(id, Material.SADDLE, "Конный прорыв", "Скопированная способность помещика");
             case "chameleon_camouflage" -> create(id, Material.LIME_DYE, "Мой окрас", "Скопированная способность хамелеона");
