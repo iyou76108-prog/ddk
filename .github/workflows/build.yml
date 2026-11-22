@@ -1,4 +1,4 @@
-name: Build plugin
+name: Build plugins and skin resource pack
 
 on:
   push:
@@ -19,11 +19,38 @@ jobs:
           distribution: temurin
           java-version: '21'
           cache: maven
-      - name: Build
+      - name: Build SMPClasses
         run: mvn --batch-mode --no-transfer-progress clean verify
-      - name: Upload plugin JAR
+      - name: Build SMPClassSkins plugin
+        run: mvn --batch-mode --no-transfer-progress -f skin-plugin/pom.xml clean verify
+      - name: Build resource pack
+        run: |
+          python3 skin-plugin/resourcepack/build_pack.py target/SMPClassSkins-ResourcePack
+          cd target
+          zip -qr SMPClassSkins-ResourcePack-1.0.0.zip SMPClassSkins-ResourcePack
+      - name: Upload SMPClasses JAR
         uses: actions/upload-artifact@v4
         with:
           name: SMPClasses-1.3.2
           path: target/SMPClasses-1.3.2.jar
+          if-no-files-found: error
+      - name: Upload SMPClassSkins JAR
+        uses: actions/upload-artifact@v4
+        with:
+          name: SMPClassSkins-1.0.0
+          path: skin-plugin/target/SMPClassSkins-1.0.0.jar
+          if-no-files-found: error
+      - name: Upload SMPClassSkins resource pack
+        uses: actions/upload-artifact@v4
+        with:
+          name: SMPClassSkins-ResourcePack-1.0.0
+          path: target/SMPClassSkins-ResourcePack-1.0.0.zip
+          if-no-files-found: error
+      - name: Upload combined skins bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: SMPClassSkins-Bundle-1.0.0
+          path: |
+            skin-plugin/target/SMPClassSkins-1.0.0.jar
+            target/SMPClassSkins-ResourcePack-1.0.0.zip
           if-no-files-found: error
