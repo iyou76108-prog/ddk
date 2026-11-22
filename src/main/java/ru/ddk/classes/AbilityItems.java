@@ -81,7 +81,7 @@ public final class AbilityItems {
                     create("owner_place", Material.RED_BANNER, "Моё место", "Поставить или поднять флаг деревни"),
                     create("owner_work", Material.WRITABLE_BOOK, "Работайте за меня", "Выбрать профессию для жителя"),
                     create("owner_army", Material.IRON_SWORD, "Армия", "15 бойцов на 20 секунд; ПКМ по игроку исключает его из целей"),
-                    create("owner_mega", Material.SADDLE, "Мега житель", "Оседлать одного жителя на 15 секунд; WASD — движение"),
+                    create("owner_mega", Material.SADDLE, "Конный прорыв", "Оседлать быстрого коня со Скоростью IV на 20 секунд"),
                     createPassive("owner_passive", Material.HEART_OF_THE_SEA, "Возьму взамен",
                             "+2 сердца и +0,5 брони за каждого принадлежащего жителя")
             };
@@ -124,7 +124,7 @@ public final class AbilityItems {
             case "summoner_legion" -> create(id, Material.RAVAGER_SPAWN_EGG, "Легион бездны", "Скопированная способность призывателя");
             case "owner_work" -> create(id, Material.WRITABLE_BOOK, "Работайте за меня", "Скопированная способность помещика");
             case "owner_army" -> create(id, Material.IRON_SWORD, "Армия", "Скопированная способность помещика");
-            case "owner_mega" -> create(id, Material.SADDLE, "Мега житель", "Скопированная способность помещика");
+            case "owner_mega" -> create(id, Material.SADDLE, "Конный прорыв", "Скопированная способность помещика");
             case "chameleon_camouflage" -> create(id, Material.LIME_DYE, "Мой окрас", "Скопированная способность хамелеона");
             case "chameleon_tongue" -> create(id, Material.SNOWBALL, "Лизнуть языком", "Скопированная способность хамелеона");
             case "archmage_firebolt" -> create(id, Material.FIRE_CHARGE, "Огненное копьё", "Скопированная способность архимага");
