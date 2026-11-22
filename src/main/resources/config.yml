@@ -20,7 +20,7 @@ cooldowns:
     place: 90
     work_order: 10
     army: 120
-    mega_villager: 75
+    horse_ride: 75
   chameleon:
     camouflage: 22
     tongue: 28
@@ -34,7 +34,7 @@ cooldowns:
 
 durations:
   army: 0 # 0 = бессрочно, пока стражники не погибнут
-  mega_villager: 15
+  horse_ride: 20
   camouflage: 4
   copied_skill: 80
   archmage_lava: 10
