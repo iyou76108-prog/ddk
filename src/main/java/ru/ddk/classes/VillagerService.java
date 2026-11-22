@@ -594,6 +594,19 @@ public final class VillagerService {
         }
     }
 
+    public void cleanupTransientEntities() {
+        for (World world : Bukkit.getWorlds()) {
+            for (Entity entity : new ArrayList<>(world.getEntities())) {
+                String kind = kindOf(entity);
+                if ("mega".equals(kind) || "horse_ride".equals(kind) || "minion".equals(kind)) {
+                    entity.remove();
+                }
+            }
+        }
+        armies.clear();
+        horseRides.clear();
+    }
+
     private void updatePassiveBonuses() {
         for (Player player : Bukkit.getOnlinePlayers()) {
             ClassType type = data.getClass(player.getUniqueId());
