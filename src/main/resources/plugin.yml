@@ -1,5 +1,5 @@
 name: SMPClasses
-version: 1.2.0
+version: 1.2.1
 main: ru.ddk.classes.SMPClassesPlugin
 api-version: '1.21.11'
 author: ddk
