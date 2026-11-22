@@ -1,14 +1,14 @@
-# SMP Classes 1.3.0 — Purpur 1.21.11
+# SMP Classes 1.3.1 — Purpur 1.21.11
 
 Плагин с шестью классами для анархичного SMP. Требуется Java 21 и Purpur/Paper API 1.21.11. Клиентские моды не нужны.
 
 ## Установка
 
-1. Скопируйте `SMPClasses-1.3.0.jar` в `plugins/`.
+1. Скопируйте `SMPClasses-1.3.1.jar` в `plugins/`.
 2. Перезапустите сервер.
 3. При первом входе выберите класс.
 
-Сборка: `mvn clean package`. Результат: `target/SMPClasses-1.3.0.jar`. GitHub Actions прикладывает JAR в артефакт **SMPClasses-1.3.0**.
+Сборка: `mvn clean package`. Результат: `target/SMPClasses-1.3.1.jar`. GitHub Actions прикладывает JAR в артефакт **SMPClasses-1.3.1**.
 
 ## Управление
 
