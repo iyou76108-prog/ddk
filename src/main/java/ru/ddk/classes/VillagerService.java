@@ -517,7 +517,9 @@ public final class VillagerService {
             UUID ownerId = entry.getKey();
             Army army = entry.getValue();
             if (army.expiresAt() <= now) {
-                disbandArmy(ownerId);
+                army.members().forEach(Entity::remove);
+                ownedEntities(ownerId, "army").forEach(Entity::remove);
+                iterator.remove();
                 continue;
             }
             Player owner = Bukkit.getPlayer(ownerId);
