@@ -90,7 +90,11 @@ public final class SkinPlugin extends JavaPlugin implements Listener, CommandExe
         if (e.getPlayer() instanceof Player p) Bukkit.getScheduler().runTaskLater(this, () -> applyAll(p), 1L);
     }
     @EventHandler public void onDrag(InventoryDragEvent e) {
-        if (e.getWhoClicked() instanceof Player p && !(e.getView().getTopInventory().getHolder() instanceof Menu))
+        if (e.getView().getTopInventory().getHolder() instanceof Menu) {
+            e.setCancelled(true);
+            return;
+        }
+        if (e.getWhoClicked() instanceof Player p)
             Bukkit.getScheduler().runTaskLater(this, () -> applyAll(p), 1L);
     }
     @EventHandler public void onClick(InventoryClickEvent e) {
