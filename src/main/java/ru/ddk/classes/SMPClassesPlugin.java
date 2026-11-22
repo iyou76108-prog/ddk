@@ -23,7 +23,7 @@ public final class SMPClassesPlugin extends JavaPlugin {
         if (getCommand("class") != null) getCommand("class").setExecutor(gameListener);
         if (getCommand("classadmin") != null) getCommand("classadmin").setExecutor(gameListener);
 
-        getLogger().info("SMPClasses включён: 5 классов загружены.");
+        getLogger().info("SMPClasses включён: 6 классов загружены.");
     }
 
     @Override
